@@ -17,3 +17,13 @@ A simple Streamlit app showing the GDP of different countries in the world.
    ```
    $ streamlit run streamlit_app.py
    ```
+
+## Wacky Tracks (bonus game)
+
+`wacky_tracks/index.html` is a self-contained browser kart racer in the spirit of
+*Wacky Wheels*, raced in WW2 tanks: Tiger I, M4 Sherman, Cromwell and T-34/85.
+Open the file in any modern browser — no build step or server needed.
+
+- **Drive:** arrow keys or WASD · **Fire:** Space · **Use crate:** Shift or E · **Pause:** P · **Sound:** M
+- Three battlefields (Normandy Bocage, Kursk Steppe, Tobruk Run), three AI difficulty levels, 3 or 5 laps.
+- Supply crates hold Turbo, Mines, Salvo, Repair and an Artillery strike on the leader.
