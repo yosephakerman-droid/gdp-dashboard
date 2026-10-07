@@ -78,7 +78,7 @@ tr.you td{color:var(--khaki)}
   <section class="overlay" id="menu" aria-label="Race setup">
     <header class="brand">
       <h1>Wacky Tracks</h1>
-      <p>Kart racing for armour, 1944. Grab supply crates, fire at whatever is in front of you, and cross the line first.</p>
+      <p>Kart racing for armour, 1944. Grab supply crates, blast through infantry roadblocks, and cross the line first.</p>
     </header>
     <div>
       <h2 class="label">Choose your tank</h2>
@@ -91,7 +91,7 @@ tr.you td{color:var(--khaki)}
     </div>
     <div class="go">
       <button class="btn primary" id="startBtn">Start engines</button>
-      <p class="keys"><b>↑↓←→</b> or <b>WASD</b> drive &nbsp; <b>Space</b> fire &nbsp; <b>Shift</b>/<b>E</b> use crate &nbsp; <b>P</b> pause &nbsp; <b>M</b> sound</p>
+      <p class="keys"><b>↑↓←→</b> or <b>WASD</b> drive &nbsp; <b>Space</b> fire (the turret tracks targets) &nbsp; <b>Shift</b>/<b>E</b> use crate &nbsp; <b>P</b> pause &nbsp; <b>M</b> sound</p>
     </div>
   </section>
 
@@ -145,22 +145,22 @@ sx.imageSmoothingEnabled = false;
 
 // ---------------------------------------------------------------- tanks
 const TANKS = [
-  { id: 'tiger', name: 'Tiger I', nation: 'Germany', max: 118, acc: 52, turn: 1.75, taken: 0.55, dmg: 45, reload: 2.2, mass: 1.7,
+  { id: 'tiger', name: 'Tiger I', nation: 'Germany', max: 118, acc: 52, turn: 1.75, taken: 0.55, dmg: 45, reload: 2.2, mass: 1.7, trav: 0.9,
     color: [198, 174, 114], dark: [62, 57, 46], tag: '#f2c14e', gun: '88 mm',
     blurb: '100 mm of frontal armour and the 88. Slow off the line, very hard to stop.' },
-  { id: 'sherman', name: 'M4 Sherman', nation: 'USA', max: 136, acc: 74, turn: 2.1, taken: 0.8, dmg: 30, reload: 1.3, mass: 1.1,
+  { id: 'sherman', name: 'M4 Sherman', nation: 'USA', max: 136, acc: 74, turn: 2.1, taken: 0.8, dmg: 30, reload: 1.3, mass: 1.1, trav: 1.8,
     color: [92, 98, 58], dark: [50, 50, 40], tag: '#e8e6dc', gun: '75 mm',
     blurb: 'Reliable all-rounder with a quick-loading 75 mm gun.' },
-  { id: 'cromwell', name: 'Cromwell', nation: 'Britain', max: 156, acc: 80, turn: 2.15, taken: 1.0, dmg: 25, reload: 1.15, mass: 1.0,
+  { id: 'cromwell', name: 'Cromwell', nation: 'Britain', max: 156, acc: 80, turn: 2.15, taken: 1.0, dmg: 25, reload: 1.15, mass: 1.0, trav: 1.3,
     color: [124, 116, 82], dark: [52, 50, 40], tag: '#5aa0e6', gun: '75 mm',
     blurb: 'Fastest tank on the grid. Thin armour, so keep it moving.' },
-  { id: 't34', name: 'T-34/85', nation: 'USSR', max: 145, acc: 84, turn: 2.3, taken: 0.75, dmg: 34, reload: 1.6, mass: 1.15,
+  { id: 't34', name: 'T-34/85', nation: 'USSR', max: 145, acc: 84, turn: 2.3, taken: 0.75, dmg: 34, reload: 1.6, mass: 1.15, trav: 1.1,
     color: [76, 98, 52], dark: [44, 46, 36], tag: '#e5483b', gun: '85 mm',
     blurb: 'Sloped armour and wide tracks. Corners better than anything else here.' },
 ];
 
 // ---------------------------------------------------------------- 3D models
-// Local axes: x forward, y right, z up. Roughly 2.5 units to the metre.
+// Local axes: x forward, y right, z up. 2.5 units to the metre, built from the real hull, turret and gun dimensions.
 function newell(vs) {
   let nx = 0, ny = 0, nz = 0;
   for (let i = 0; i < vs.length; i++) {
@@ -170,7 +170,7 @@ function newell(vs) {
   const l = Math.hypot(nx, ny, nz);
   return l < 1e-6 ? null : [nx / l, ny / l, nz / l];
 }
-// closed convex shape from polygons; normals are turned to face away from its centre
+// closed shape from polygons; normals are turned to face away from its centre
 function solid(polys, c) {
   let cx = 0, cy = 0, cz = 0, k = 0;
   polys.forEach(p => p.forEach(v => { cx += v[0]; cy += v[1]; cz += v[2]; k++; }));
@@ -191,12 +191,12 @@ function extrude(poly, map, a0, a1, c) {
   for (let i = 0; i < poly.length; i++) { const j = (i + 1) % poly.length; polys.push([A[i], A[j], B[j], B[i]]); }
   return solid(polys, c);
 }
-const prism = (prof, y0, y1, c, xo = 0) => extrude(prof, (x, z, y) => [x + xo, y, z], y0, y1, c);  // side profile (x,z) across the width
-const slab = (top, z0, z1, c, xo = 0) => extrude(top, (x, y, z) => [x + xo, y, z], z0, z1, c);     // top-view outline (x,y) raised
-const tube = (sec, x0, x1, c) => extrude(sec, (y, z, x) => [x, y, z], x0, x1, c);                 // cross-section (y,z) lengthwise
+const prism = (prof, y0, y1, c) => extrude(prof, (x, z, y) => [x, y, z], y0, y1, c);   // side profile (x,z) across the width
+const slab = (top, z0, z1, c) => extrude(top, (x, y, z) => [x, y, z], z0, z1, c);     // top-view outline (x,y) raised
+const tube = (sec, x0, x1, c) => extrude(sec, (y, z, x) => [x, y, z], x0, x1, c);     // cross-section (y,z) lengthwise
 const box = (x0, x1, y0, y1, z0, z1, c) => slab([[x0, y0], [x1, y0], [x1, y1], [x0, y1]], z0, z1, c);
-function loft(secs, c, xo = 0) {
-  const S = secs.map(([x, p]) => p.map(([y, z]) => [x + xo, y, z]));
+function loft(secs, c) {
+  const S = secs.map(([x, p]) => p.map(([y, z]) => [x, y, z]));
   const polys = [S[0], S[S.length - 1]];
   for (let k = 0; k + 1 < S.length; k++) for (let i = 0; i < S[k].length; i++) {
     const j = (i + 1) % S[k].length; polys.push([S[k][i], S[k][j], S[k + 1][j], S[k + 1][i]]);
@@ -209,157 +209,252 @@ const sym = half => [...half, ...half.slice().reverse().map(([y, z]) => [-y, z])
 function decal(poly, y, c, bias = 0.4) { return [-1, 1].map(s => ({ v: poly.map(([x, z]) => [x, y * s, z]), n: [0, s, 0], c, bias })); }
 const top = (poly, z, c, bias = 0.4) => ({ v: poly.map(([x, y]) => [x, y, z]), n: [0, 0, 1], c, bias });
 const front = (poly, x, c, bias = 0.4) => ({ v: poly.map(([y, z]) => [x, y, z]), n: [1, 0, 0], c, bias });
+// a marking on a sloped plate: origin o, in-plane axes u and v, outward normal n
+const plate = (poly, o, u, v, n, c, bias = 0.4) => ({ v: poly.map(([a, b]) => [o[0] + u[0] * a + v[0] * b, o[1] + u[1] * a + v[1] * b, o[2] + u[2] * a + v[2] * b]), n, c, bias });
 const flag = (poly, y, c, bias) => [1, -1].map(s => ({ v: poly.map(([x, z]) => [x, y, z]), n: [0, s, 0], c, bias, edge: false }));
 const star = (cx, cz, r) => Array.from({ length: 10 }, (_, i) => { const a = -Math.PI / 2 + i * Math.PI / 5, rr = i % 2 ? r * 0.42 : r; return [cx + Math.cos(a) * rr, cz - Math.sin(a) * rr]; });
 const circ = (cx, cz, r, n = 10) => Array.from({ length: n }, (_, i) => [cx + Math.cos(i / n * TAU) * r, cz + Math.sin(i / n * TAU) * r]);
 const crossP = (cx, cz, r, t) => [[cx - t, cz + r], [cx + t, cz + r], [cx + t, cz + t], [cx + r, cz + t], [cx + r, cz - t], [cx + t, cz - t], [cx + t, cz - r], [cx - t, cz - r], [cx - t, cz - t], [cx - r, cz - t], [cx - r, cz + t], [cx - t, cz + t]];
 const rect = (x0, z0, x1, z1) => [[x0, z0], [x1, z0], [x1, z1], [x0, z1]];
-const trackProf = (x0, x1, h) => [[x0 + 1, 0.3], [x1 - 1, 0.3], [x1 + 0.6, 1.8], [x1 - 0.4, h], [x0, h], [x0 - 0.6, 1.6]];
-function roadWheels(xs, z, r, y, tire, disc, hub) {
-  const f = [];
-  for (const x of xs) f.push(...decal(circ(x, z, r), y, tire, 0.3), ...decal(circ(x, z, r * 0.74), y, disc, 0.36), ...decal(circ(x, z, r * 0.24, 6), y, hub, 0.42));
-  return f;
-}
+const trackProf = (x0, x1, h) => [[x0 + 1.1, 0], [x1 - 1.1, 0], [x1 + 0.1, 0.9], [x1 - 0.2, h - 0.25], [x1 - 0.7, h], [x0 + 0.5, h], [x0 - 0.2, h - 0.5], [x0 - 0.3, 0.8]];
 const WHITE = [238, 236, 226], BLACK = [26, 26, 24];
-// radio mast with a pennant in national colours, trailing behind the pole
+// turret numbers in a 3x5 stencil, laid out to read correctly from either side
+const DIGITS = { 0: '111101101101111', 1: '010110010010111', 2: '111001111100111', 3: '111001011001111', 4: '101101111001001', 5: '111100111001111', 6: '111100111101111', 7: '111001010010010', 8: '111101111101111', 9: '111101111001111' };
+function stencil(str, cx, cz, px, y, c, bias = 0.45) {
+  const out = [], cols = str.length * 4 - 1;
+  for (const s of [-1, 1]) {
+    const dir = s > 0 ? 1 : -1;
+    [...str].forEach((ch, k) => {
+      const bits = DIGITS[ch];
+      for (let ry = 0; ry < 5; ry++) for (let rx = 0; rx < 3; rx++) {
+        if (bits[ry * 3 + rx] !== '1') continue;
+        const col = k * 4 + rx, x = cx + dir * (col - cols / 2 + 0.5) * px, z = cz + (2 - ry) * px;
+        out.push({ v: rect(x - px / 2, z - px / 2, x + px / 2, z + px / 2).map(([xx, zz]) => [xx, y * s, zz]), n: [0, s, 0], c, bias });
+      }
+    });
+  }
+  return out;
+}
+// radio antenna with a pennant in national colours, trailing behind the pole
 function mast(x, y, z0, nation) {
-  const zt = z0 + 9.5, f = box(x - 0.13, x + 0.13, y - 0.13, y + 0.13, z0, zt, [36, 36, 32]);
-  const L = x - 3.4, B = zt - 2.1, R = (x0, z0_, x1, z1) => rect(x0, z0_, x1, z1);
+  const zt = z0 + 8, f = box(x - 0.1, x + 0.1, y - 0.1, y + 0.1, z0, zt, [36, 36, 32]);
+  const L = x - 3, B = zt - 1.8, R = rect;
   const lay = (poly, c, b) => f.push(...flag(poly, y, c, b));
   if (nation === 'Germany') {
     lay(R(L, B, x, zt), [214, 210, 196], 0.3);
-    lay(crossP((L + x) / 2, (B + zt) / 2, 0.85, 0.3), WHITE, 0.35);
-    lay(crossP((L + x) / 2, (B + zt) / 2, 0.7, 0.16), BLACK, 0.4);
+    lay(crossP((L + x) / 2, (B + zt) / 2, 0.75, 0.27), WHITE, 0.35);
+    lay(crossP((L + x) / 2, (B + zt) / 2, 0.62, 0.14), BLACK, 0.4);
   } else if (nation === 'USA') {
     lay(R(L, B, x, zt), WHITE, 0.3);
-    for (let i = 0; i < 4; i++) { const z = B + i * 0.6; lay(R(L, z, x, z + 0.3), [190, 40, 46], 0.35); }
-    lay(R(x - 1.5, zt - 1.05, x, zt), [40, 52, 120], 0.4);
+    for (let i = 0; i < 4; i++) { const z = B + i * 0.5; lay(R(L, z, x, z + 0.26), [190, 40, 46], 0.35); }
+    lay(R(x - 1.3, zt - 0.9, x, zt), [40, 52, 120], 0.4);
   } else if (nation === 'Britain') {
     const zc = (B + zt) / 2, xc = (L + x) / 2;
     lay(R(L, B, x, zt), [36, 52, 128], 0.3);
-    lay([[L, B], [L + 0.4, B], [x, zt - 0.3], [x, zt], [x - 0.4, zt], [L, B + 0.3]], WHITE, 0.33);
-    lay([[L, zt], [L, zt - 0.3], [x - 0.4, B], [x, B], [x, B + 0.3], [L + 0.4, zt]], WHITE, 0.33);
-    lay(R(L, zc - 0.38, x, zc + 0.38), WHITE, 0.36); lay(R(xc - 0.38, B, xc + 0.38, zt), WHITE, 0.36);
-    lay(R(L, zc - 0.2, x, zc + 0.2), [200, 36, 44], 0.4); lay(R(xc - 0.2, B, xc + 0.2, zt), [200, 36, 44], 0.4);
+    lay([[L, B], [L + 0.35, B], [x, zt - 0.25], [x, zt], [x - 0.35, zt], [L, B + 0.25]], WHITE, 0.33);
+    lay([[L, zt], [L, zt - 0.25], [x - 0.35, B], [x, B], [x, B + 0.25], [L + 0.35, zt]], WHITE, 0.33);
+    lay(R(L, zc - 0.33, x, zc + 0.33), WHITE, 0.36); lay(R(xc - 0.33, B, xc + 0.33, zt), WHITE, 0.36);
+    lay(R(L, zc - 0.17, x, zc + 0.17), [200, 36, 44], 0.4); lay(R(xc - 0.17, B, xc + 0.17, zt), [200, 36, 44], 0.4);
   } else {
     lay(R(L, B, x, zt), [200, 32, 36], 0.3);
-    lay(star(x - 0.8, zt - 0.6, 0.42), [240, 200, 60], 0.4);
+    lay(star(x - 0.7, zt - 0.5, 0.36), [240, 200, 60], 0.4);
   }
   return f;
 }
 
 function buildModel(id) {
   const T = TANKS.find(t => t.id === id), C = T.color, D = T.dark;
-  const f = [], add = a => f.push(...a);
-  let tip, tipZ;
+  const m = { hull: [], tur: [], gun: [], wheels: [], pv: 0, wy: 0, tip: 0, tipZ: 0 };
+  let cur = m.hull;
+  const add = a => { if (Array.isArray(a)) cur.push(...a); else cur.push(a); };
+  const to = k => { cur = m[k]; };
+  const wheel = (x, z, r, y, tyre, disc, hub, b = 0.3) => {
+    add(decal(circ(x, z, r, 14), y, tyre, b)); add(decal(circ(x, z, r * 0.78, 12), y, disc, b + 0.04)); add(decal(circ(x, z, r * 0.24, 6), y, hub, b + 0.08));
+    m.wheels.push({ x, z, r: r * 0.55, b: b + 0.1 }); m.wy = y;
+  };
   if (id === 'tiger') {
-    // boxy hull overhanging the tracks, horseshoe turret, long 88 with muzzle brake, interleaved wheels, dunkelgelb with camouflage
-    const CA = [104, 112, 64], CB = [134, 84, 52], LT = [212, 188, 128], xo = -0.4;
-    add(prism(trackProf(-8.0, 8.0, 4.0), -4.6, -2.9, D)); add(prism(trackProf(-8.0, 8.0, 4.0), 2.9, 4.6, D));
-    for (let i = 0; i < 8; i++) { const x = -6.3 + i * 1.75; add(decal(circ(x, 1.95, 1.45), 4.65, i % 2 ? [156, 138, 94] : [182, 160, 106], 0.3 + (i % 2) * 0.03)); add(decal(circ(x, 1.95, 0.35, 6), 4.65, [72, 66, 50], 0.45)); }
-    add(box(-7.6, 7.2, -2.9, 2.9, 1.2, 4.0, C));
-    add(prism([[5.8, 1.2], [7.2, 1.2], [8.1, 2.6], [7.4, 4.0], [5.8, 4.0]], -2.9, 2.9, C));
-    add(box(-7.9, 7.0, -4.6, 4.6, 4.0, 6.2, C));
-    f.push(front(rect(-2.9, 5.0, -1.1, 5.6), 7.0, [40, 38, 32]), front(circ(2.0, 5.2, 0.38, 6), 7.0, [40, 38, 32]));
-    for (const s of [-1, 1]) f.push(top([[-7.5, 1.0 * s], [-5.0, 1.0 * s], [-5.0, 3.6 * s], [-7.5, 3.6 * s]], 6.2, [150, 132, 88], 0.3));
-    add(box(-8.4, -7.9, -2.0, -1.4, 4.4, 6.9, [92, 58, 40])); add(box(-8.4, -7.9, 1.4, 2.0, 4.4, 6.9, [92, 58, 40]));
-    add(decal([[-7.2, 4.3], [-4.8, 5.8], [-3.0, 4.9], [-4.6, 4.1]], 4.62, CA, 0.3));
-    add(decal([[2.0, 4.1], [3.8, 5.9], [6.0, 5.2], [4.6, 4.1]], 4.62, CB, 0.3));
-    add(decal(crossP(-1.4, 5.1, 0.95, 0.34), 4.62, WHITE, 0.36)); add(decal(crossP(-1.4, 5.1, 0.8, 0.18), 4.62, BLACK, 0.42));
-    f.push(top([[-6.5, -2.4], [-3.0, -3.8], [-1.0, -2.0], [-4.0, -1.0]], 6.2, CA, 0.32), top([[0.5, 1.5], [3.5, 3.8], [5.5, 2.0], [2.5, 0.8]], 6.2, CB, 0.32));
-    add(slab([[3.0, -3.3], [3.0, 3.3], [0.6, 3.6], [-2.4, 3.3], [-3.7, 2.2], [-4.1, 0], [-3.7, -2.2], [-2.4, -3.3], [0.6, -3.6]], 6.2, 9.0, C, xo));
-    add(box(-5.6, -4.3, -2.4, 2.4, 6.6, 8.4, C));
-    add(decal([[-3.2, 6.6], [-1.2, 8.4], [1.0, 7.6], [-0.8, 6.6]], 3.64, CB, 0.3));
-    f.push(top([[-3.2, -1.2], [-1.2, -2.8], [1.5, -1.6], [0, 0.4]], 9.0, CA, 0.32), top([[-2.2, 1.0], [0.8, 2.6], [2.4, 1.2], [0.4, 0.2]], 9.0, CB, 0.32));
-    add(box(2.6, 3.9, -1.9, 1.9, 6.6, 8.8, LT));
-    add(tube(circ(0, 7.7, 0.42, 8), 3.9, 15.0, C)); add(tube(circ(0, 7.7, 0.78, 8), 15.0, 16.4, D));
-    add(slab(circ(-2.4, -1.9, 1.0, 8), 9.0, 10.0, C));
-    add(mast(-6.9, -3.8, 6.2, 'Germany'));
-    tip = 16.4; tipZ = 7.7;
-  } else if (id === 'sherman') {
-    // tall rounded cast hull, sloped glacis, rounded turret, short 75, VVSS bogies, olive drab with white stars
-    const W = WHITE, xo = 0.6;
-    add(prism(trackProf(-7.4, 7.0, 3.3), -4.2, -2.7, D)); add(prism(trackProf(-7.4, 7.0, 3.3), 2.7, 4.2, D));
-    for (const bx of [-4.6, -0.6, 3.4]) {
-      add(decal([[bx - 1.4, 1.0], [bx + 1.4, 1.0], [bx + 0.6, 2.7], [bx - 0.6, 2.7]], 4.22, [74, 78, 48], 0.3));
-      for (const dx of [-0.95, 0.95]) { add(decal(circ(bx + dx, 1.15, 0.85), 4.22, [58, 58, 46], 0.36)); add(decal(circ(bx + dx, 1.15, 0.28, 6), 4.22, [96, 100, 62], 0.42)); }
-      add(decal(circ(bx + 0.5, 2.95, 0.36, 6), 4.22, [58, 58, 46], 0.36));
+    // Tiger I, mid production: 6.3 m box hull with the superstructure overhanging the tracks,
+    // horseshoe turret with spare track links, 88 mm KwK 36 with double-baffle muzzle brake, interleaved wheels
+    const CA = [104, 112, 64], CB = [134, 84, 52], RIM = [58, 54, 44];
+    m.pv = -0.6;
+    add(prism(trackProf(-7.7, 7.4, 2.75), -4.4, -2.6, D)); add(prism(trackProf(-7.7, 7.4, 2.75), 2.6, 4.4, D));
+    for (let i = 0; i < 8; i++) { const x = -5.9 + i * 1.69, outer = i % 2 === 0; wheel(x, 1.05, 1.0, 4.42, RIM, outer ? [178, 158, 106] : [150, 134, 92], [72, 66, 50], outer ? 0.34 : 0.3); }
+    add(decal(circ(6.75, 1.85, 0.8, 8), 4.42, [74, 68, 52], 0.3)); add(decal(circ(-7.05, 1.55, 0.75, 10), 4.42, [74, 68, 52], 0.3));
+    add(box(-7.6, 7.2, -2.6, 2.6, 1.2, 2.9, C));
+    add(prism([[5.6, 1.2], [7.3, 1.3], [7.9, 2.3], [7.5, 2.9], [5.6, 2.9]], -2.6, 2.6, C));
+    add(box(-7.9, 7.0, -4.45, 4.45, 2.9, 4.9, C));
+    add(box(7.0, 7.8, -4.45, -2.6, 2.82, 2.98, C)); add(box(7.0, 7.8, 2.6, 4.45, 2.82, 2.98, C));
+    add(front(rect(-2.9, 3.9, -1.1, 4.35), 7.0, [34, 32, 28])); add(front(circ(2.0, 3.95, 0.32, 8), 7.0, [40, 38, 32]));
+    add(box(7.0, 7.4, -3.3, -2.7, 4.45, 4.85, [64, 62, 52]));
+    add(top(circ(5.3, -1.9, 0.55, 10), 4.9, [168, 150, 100], 0.3)); add(top(circ(5.3, 1.9, 0.55, 10), 4.9, [168, 150, 100], 0.3));
+    for (const s of [-1, 1]) {
+      add(top([[-7.6, 0.6 * s], [-5.3, 0.6 * s], [-5.3, 3.5 * s], [-7.6, 3.5 * s]], 4.9, [158, 140, 94], 0.25));
+      add(top(circ(-6.4, 1.8 * s, 0.6, 10), 4.9, [90, 86, 72], 0.3)); add(top(circ(-4.5, 1.8 * s, 0.6, 10), 4.9, [90, 86, 72], 0.3));
     }
-    add(decal(circ(6.4, 2.3, 1.0), 4.22, [62, 62, 48], 0.33)); add(decal(circ(-6.9, 1.8, 0.9), 4.22, [62, 62, 48], 0.33));
+    add(top(rect(-3.6, 3.7, 1.8, 3.95), 4.9, [70, 64, 52], 0.3));
+    add(box(-8.35, -7.9, -2.0, -1.4, 2.4, 5.5, [98, 62, 42])); add(box(-8.35, -7.9, 1.4, 2.0, 2.4, 5.5, [98, 62, 42]));
+    add(box(-8.65, -7.9, -3.9, -2.6, 3.1, 4.0, C)); add(box(-8.65, -7.9, 2.6, 3.9, 3.1, 4.0, C));
+    add(decal([[-7.2, 3.1], [-4.8, 4.6], [-3.0, 3.8], [-4.6, 3.0]], 4.47, CA, 0.3));
+    add(decal([[2.2, 3.0], [3.8, 4.7], [6.0, 4.1], [4.6, 3.0]], 4.47, CB, 0.3));
+    add(decal(crossP(-1.4, 3.9, 0.85, 0.3), 4.47, WHITE, 0.36)); add(decal(crossP(-1.4, 3.9, 0.72, 0.16), 4.47, BLACK, 0.42));
+    add(top([[-5.5, -2.4], [-3.0, -3.9], [-1.0, -2.0], [-4.0, -1.0]], 4.9, CA, 0.32)); add(top([[0.5, 1.5], [3.5, 3.9], [5.0, 2.0], [2.5, 0.8]], 4.9, CB, 0.32));
+    add(mast(-7.3, 3.7, 4.9, 'Germany'));
+    to('tur');
+    add(slab([[2.3, -3.0], [2.3, 3.0], [0.4, 3.55], [-2.2, 3.4], [-3.8, 2.6], [-4.5, 1.2], [-4.6, 0], [-4.5, -1.2], [-3.8, -2.6], [-2.2, -3.4], [0.4, -3.55]], 4.9, 6.9, C));
+    add(box(-5.9, -4.4, -2.4, 2.4, 5.1, 6.5, C));
+    for (let i = 0; i < 4; i++) add(decal(rect(-0.2 + i * 0.62, 5.25, 0.32 + i * 0.62, 6.55), 3.58, [74, 66, 52], 0.35));
+    add(stencil('131', -2.0, 5.85, 0.2, 3.46, [160, 32, 28]));
+    add(top([[-3.4, -1.2], [-1.4, -2.9], [1.5, -1.6], [0, 0.4]], 6.9, CA, 0.32)); add(top([[-2.4, 1.0], [0.6, 2.7], [2.0, 1.2], [0.2, 0.2]], 6.9, CB, 0.32));
+    add(slab(circ(-2.7, -1.6, 0.95, 12), 6.9, 7.55, C)); add(top(circ(-2.7, -1.6, 0.68, 12), 7.55, [172, 152, 102], 0.3));
+    add(top(circ(-0.5, 1.6, 0.62, 10), 6.9, [172, 152, 102], 0.3));
+    for (const s of [-1, 1]) for (let k = 0; k < 3; k++) add(box(1.0 - k * 0.5, 1.32 - k * 0.5, s > 0 ? 3.0 : -3.35, s > 0 ? 3.35 : -3.0, 6.4, 6.75, [74, 70, 56]));
+    add(box(2.3, 3.3, -1.75, 1.75, 5.05, 6.75, [212, 188, 128]));
+    to('gun');
+    add(tube(circ(0, 6.0, 0.3, 10), 3.3, 12.3, C));
+    add(tube(circ(0, 6.0, 0.62, 8), 12.2, 12.6, D)); add(tube(circ(0, 6.0, 0.4, 8), 12.6, 12.9, D)); add(tube(circ(0, 6.0, 0.62, 8), 12.9, 13.3, D));
+    m.tip = 13.3; m.tipZ = 6.0;
+  } else if (id === 'sherman') {
+    // M4A3 Sherman (75): tall welded hull with 47° glacis and sponsons, rounded cast turret,
+    // short 75 mm M3, three VVSS bogies a side with return rollers, olive drab with white stars
+    const W = WHITE, BOG = [74, 78, 48];
+    m.pv = 0.4;
+    add(prism(trackProf(-7.4, 7.0, 2.35), -3.35, -2.25, D)); add(prism(trackProf(-7.4, 7.0, 2.35), 2.25, 3.35, D));
+    for (const bx of [-4.4, -0.6, 3.2]) {
+      add(decal([[bx - 1.5, 0.45], [bx + 1.5, 0.45], [bx + 0.7, 1.95], [bx - 0.7, 1.95]], 3.37, BOG, 0.26));
+      for (const dx of [-0.95, 0.95]) wheel(bx + dx, 0.66, 0.64, 3.37, [52, 52, 42], [86, 92, 58], [52, 52, 42]);
+      add(decal(circ(bx + 0.55, 2.05, 0.28, 8), 3.37, [52, 52, 42], 0.34));
+    }
+    add(decal(circ(6.4, 1.45, 0.92, 8), 3.37, [62, 62, 48], 0.3)); add(decal(circ(-6.9, 1.0, 0.7, 10), 3.37, [62, 62, 48], 0.3));
     add(loft([
-      [-7.1, sym([[3.0, 1.5], [3.9, 3.6], [3.4, 5.9]])],
-      [3.2, sym([[3.0, 1.5], [3.9, 3.6], [3.4, 5.9]])],
-      [6.4, sym([[3.0, 1.5], [3.8, 2.8], [3.2, 3.6]])],
-      [7.4, sym([[2.6, 1.8], [3.0, 2.4], [2.4, 2.9]])],
+      [-7.3, sym([[2.2, 1.0], [2.2, 2.35], [3.25, 2.35], [3.25, 4.4]])],
+      [-6.9, sym([[2.2, 1.0], [2.2, 2.35], [3.25, 2.35], [3.25, 4.8]])],
+      [4.2, sym([[2.2, 1.0], [2.2, 2.35], [3.25, 2.35], [3.25, 4.8]])],
+      [6.6, sym([[2.2, 1.0], [2.2, 2.0], [3.15, 2.2], [3.05, 2.6]])],
+      [7.3, sym([[2.0, 1.2], [2.0, 1.5], [2.5, 1.7], [2.4, 2.1]])],
     ], C));
-    add(box(3.4, 4.8, -2.6, -0.9, 5.0, 6.3, C)); add(box(3.4, 4.8, 0.9, 2.6, 5.0, 6.3, C));
-    f.push(top(circ(-5.0, 0, 2.1, 16), 5.9, W, 0.3), top(circ(-5.0, 0, 1.75, 16), 5.9, C, 0.35), top(star(-5.0, 0, 1.7), 5.9, W, 0.4));
-    add(decal(star(-3.6, 3.6, 1.2), 3.95, W));
+    const gl = Math.hypot(2.4, 2.2), gO = [4.2, 0, 4.8], gU = [2.4 / gl, 0, -2.2 / gl], gV = [0, 1, 0], gN = [2.2 / gl, 0, 2.4 / gl];
+    for (let k = 0; k < 4; k++) add(plate(rect(1.25 + k * 0.42, -2.6, 1.55 + k * 0.42, -1.0), gO, gU, gV, gN, [60, 58, 46], 0.35));
+    add(plate(circ(1.0, 1.4, 0.36, 8), gO, gU, gV, gN, [62, 66, 42], 0.4));
+    add(box(4.9, 5.6, 1.33, 1.47, 3.95, 4.08, [40, 40, 36]));
+    add(box(3.3, 4.5, -2.5, -0.7, 4.8, 5.25, C)); add(box(3.3, 4.5, 0.7, 2.5, 4.8, 5.25, C));
+    add(box(3.9, 4.2, -1.8, -1.4, 5.25, 5.5, [50, 52, 40])); add(box(3.9, 4.2, 1.4, 1.8, 5.25, 5.5, [50, 52, 40]));
+    add(box(6.2, 6.6, -2.85, -2.4, 2.65, 3.05, [64, 64, 52])); add(box(6.2, 6.6, 2.4, 2.85, 2.65, 3.05, [64, 64, 52]));
+    add(top(rect(-7.0, -2.6, -5.6, 2.6), 4.8, [78, 82, 50], 0.25));
+    add(top(circ(-3.6, 0, 1.55, 16), 4.8, W, 0.3)); add(top(circ(-3.6, 0, 1.32, 16), 4.8, C, 0.35)); add(top(star(-3.6, 0, 1.28), 4.8, W, 0.4));
+    add(decal(circ(-3.4, 3.55, 1.12, 16), 3.27, W, 0.3)); add(decal(circ(-3.4, 3.55, 0.96, 16), 3.27, C, 0.35)); add(decal(star(-3.4, 3.55, 0.92), 3.27, W, 0.4));
+    add(box(-7.65, -7.3, -2.7, 2.7, 1.9, 2.5, [70, 74, 46]));
+    to('tur');
     add(loft([
-      [-3.8, sym([[1.9, 6.0], [2.2, 7.4], [1.2, 8.6]])],
-      [-2.6, sym([[2.8, 6.0], [3.0, 7.5], [2.0, 8.9]])],
-      [1.4, sym([[2.9, 6.0], [3.0, 7.5], [2.0, 8.9]])],
-      [2.8, sym([[2.2, 6.1], [2.3, 7.4], [1.4, 8.4]])],
-    ], C, xo));
-    add(decal(star(0, 7.45, 0.85), 3.05, W));
-    add(box(3.3, 4.1, -1.5, 1.5, 6.7, 8.2, [102, 108, 66]));
-    add(tube(circ(0, 7.45, 0.34, 8), 4.1, 11.4, C)); add(tube(circ(0, 7.45, 0.44, 8), 11.2, 11.9, C));
-    add(slab(circ(-1.0, 1.3, 0.95, 8), 8.8, 9.6, C));
-    add(box(-1.4, 1.6, 1.22, 1.38, 9.6, 9.8, [36, 36, 32]));
-    add(mast(-6.4, -2.8, 5.9, 'USA'));
-    tip = 11.9; tipZ = 7.45;
+      [-2.8, sym([[1.6, 4.8], [1.9, 5.8], [1.0, 6.45]])],
+      [-1.8, sym([[2.45, 4.8], [2.55, 5.85], [1.7, 6.7]])],
+      [1.6, sym([[2.45, 4.8], [2.55, 5.85], [1.7, 6.7]])],
+      [2.6, sym([[1.9, 4.9], [2.0, 5.8], [1.2, 6.35]])],
+    ], C));
+    add(decal(star(-0.1, 5.85, 0.55), 2.6, W, 0.4));
+    add(slab(circ(-0.8, 1.0, 0.85, 12), 6.62, 6.95, C)); add(top(circ(-0.8, 1.0, 0.6, 12), 6.95, [102, 108, 66], 0.3));
+    add(top(rect(-0.4, -1.6, 0.9, -0.5), 6.7, [102, 108, 66], 0.3));
+    add(box(-1.95, -1.8, 1.55, 1.7, 6.7, 7.35, [40, 40, 36])); add(box(-2.2, 0.6, 1.55, 1.7, 7.3, 7.45, [40, 40, 36]));
+    add(box(2.5, 3.2, -1.45, 1.45, 5.0, 6.3, [102, 108, 66]));
+    add(mast(-2.4, -1.0, 6.45, 'USA'));
+    to('gun');
+    add(tube(circ(0, 5.65, 0.24, 10), 3.2, 8.4, C)); add(tube(circ(0, 5.65, 0.31, 10), 8.3, 8.8, C));
+    m.tip = 8.8; m.tipZ = 5.65;
   } else if (id === 'cromwell') {
-    // square slab-sided hull with panniers over the tracks, box turret with rear bin, five big Christie wheels, roundels
-    const xo = 0.8, BL = [40, 70, 150], RD = [190, 40, 36];
-    add(prism(trackProf(-7.8, 7.4, 4.0), -4.3, -2.8, D)); add(prism(trackProf(-7.8, 7.4, 4.0), 2.8, 4.3, D));
-    add(roadWheels([-5.8, -2.9, 0, 2.9, 5.8], 2.0, 1.6, 4.32, [44, 44, 38], [104, 100, 72], [60, 58, 46]));
-    add(box(-7.6, 6.8, -2.8, 2.8, 1.4, 4.0, C));
-    add(prism([[6.0, 1.4], [7.4, 1.8], [7.6, 4.0], [6.0, 4.0]], -2.8, 2.8, C));
-    add(box(-7.8, 6.4, -4.4, 4.4, 4.0, 5.3, C));
-    add(box(6.4, 7.9, -4.4, -2.8, 3.9, 4.15, C)); add(box(6.4, 7.9, 2.8, 4.4, 3.9, 4.15, C));
-    add(box(6.4, 7.3, -3.4, 0.6, 4.0, 5.7, C));
-    f.push(front(rect(-2.6, 4.8, -0.8, 5.3), 7.3, [40, 38, 32]));
-    for (let i = 0; i < 5; i++) f.push(top(rect(-7.4 + i * 0.5, -3.4, -7.2 + i * 0.5, 3.4), 5.3, [80, 76, 56], 0.3));
-    f.push(top(circ(-4.4, 0, 1.9, 16), 5.3, BL, 0.3), top(circ(-4.4, 0, 1.3, 16), 5.3, WHITE, 0.35), top(circ(-4.4, 0, 0.65, 12), 5.3, RD, 0.4));
-    add(slab([[3.0, -2.9], [3.0, 2.9], [-2.2, 3.3], [-3.4, 2.6], [-3.4, -2.6], [-2.2, -3.3]], 5.3, 7.9, C, xo));
-    add(box(-4.6, -2.6, -2.4, 2.4, 5.7, 7.3, C));
-    add(decal(circ(-0.6, 6.6, 0.95, 12), 3.36, BL, 0.3)); add(decal(circ(-0.6, 6.6, 0.62, 12), 3.36, WHITE, 0.35)); add(decal(circ(-0.6, 6.6, 0.3, 8), 3.36, RD, 0.4));
-    add(box(3.8, 4.5, -1.4, 1.4, 5.8, 7.5, [130, 124, 90]));
-    add(tube(circ(0, 6.65, 0.33, 8), 4.5, 12.0, C));
-    add(box(-1.6, 0, -2.0, -0.4, 7.9, 8.6, C));
-    add(mast(-6.8, -3.6, 5.3, 'Britain'));
-    tip = 12.0; tipZ = 6.65;
+    // Cromwell Mk IV: slab-sided riveted hull with panniers over the tracks, flat-sided box turret with rear bin,
+    // 75 mm QF, five large Christie wheels, Allied star on the deck and the white-red-white recognition flash
+    const W = WHITE;
+    m.pv = 0.6;
+    add(prism(trackProf(-7.7, 7.6, 2.3), -3.6, -2.6, D)); add(prism(trackProf(-7.7, 7.6, 2.3), 2.6, 3.6, D));
+    for (const x of [-5.4, -2.7, 0, 2.7, 5.4]) wheel(x, 1.0, 1.0, 3.62, [44, 44, 38], [110, 104, 76], [60, 58, 46]);
+    add(decal(circ(-7.0, 1.5, 0.8, 8), 3.62, [62, 60, 48], 0.3)); add(decal(circ(7.0, 1.1, 0.75, 10), 3.62, [62, 60, 48], 0.3));
+    add(box(-7.6, 6.9, -2.6, 2.6, 1.0, 2.5, C));
+    add(prism([[6.9, 1.0], [7.9, 1.6], [7.9, 2.5], [6.9, 2.5]], -2.6, 2.6, C));
+    add(box(-7.9, 7.0, -3.64, 3.64, 2.5, 4.7, C));
+    add(box(7.0, 8.0, -3.64, -2.6, 2.4, 2.55, C)); add(box(7.0, 8.0, 2.6, 3.64, 2.4, 2.55, C));
+    add(front(rect(0.6, 3.7, 2.2, 4.1), 7.0, [34, 32, 28])); add(front(circ(-1.6, 3.8, 0.32, 8), 7.0, [40, 38, 32]));
+    add(box(7.0, 7.5, -1.68, -1.52, 3.72, 3.88, [40, 40, 36]));
+    for (let k = 0; k < 7; k++) add(decal(rect(-6.8 + k * 2.1, 4.35, -6.65 + k * 2.1, 4.5), 3.66, [96, 90, 64], 0.3));
+    add(prism([[-8.5, 3.0], [-7.9, 3.0], [-7.9, 4.4], [-8.2, 4.4]], -1.6, 1.6, [72, 68, 54]));
+    for (let i = 0; i < 6; i++) add(top(rect(-7.6 + i * 0.45, -2.8, -7.4 + i * 0.45, 2.8), 4.7, [86, 80, 58], 0.3));
+    add(top(circ(-4.3, 0, 1.55, 16), 4.7, W, 0.3)); add(top(circ(-4.3, 0, 1.32, 16), 4.7, C, 0.35)); add(top(star(-4.3, 0, 1.28), 4.7, W, 0.4));
+    add(decal(rect(4.2, 3.1, 4.7, 4.25), 3.66, W, 0.35)); add(decal(rect(4.7, 3.1, 5.2, 4.25), 3.66, [190, 40, 36], 0.35)); add(decal(rect(5.2, 3.1, 5.7, 4.25), 3.66, W, 0.35));
+    add(box(-1.8, 1.2, 3.0, 3.55, 4.7, 5.2, C)); add(box(-1.8, 1.2, -3.55, -3.0, 4.7, 5.2, C));
+    to('tur');
+    add(slab([[2.6, -2.5], [2.6, 2.5], [-2.0, 2.75], [-2.9, 2.2], [-2.9, -2.2], [-2.0, -2.75]], 4.7, 6.6, C));
+    add(box(-4.2, -2.9, -2.3, 2.3, 5.0, 6.3, C));
+    for (let k = 0; k < 5; k++) add(decal(rect(-1.7 + k * 0.85, 6.3, -1.55 + k * 0.85, 6.45), 2.79, [90, 84, 60], 0.35));
+    add(decal(rect(-1.6, 5.0, -0.4, 6.0), 2.79, [168, 40, 34], 0.35)); add(stencil('4', -1.0, 5.5, 0.16, 2.79, W, 0.42));
+    add(slab(circ(-1.0, -1.2, 0.8, 8), 6.6, 7.1, C)); add(top(circ(-1.0, -1.2, 0.56, 8), 7.1, [132, 126, 92], 0.3));
+    add(top(rect(-0.6, 0.5, 0.8, 1.7), 6.6, [132, 126, 92], 0.3));
+    add(box(2.6, 3.05, -1.35, 1.35, 5.0, 6.3, [132, 126, 92]));
+    add(mast(-2.6, -1.6, 6.6, 'Britain'));
+    to('gun');
+    add(tube(circ(0, 5.6, 0.24, 10), 3.05, 8.6, C)); add(tube(circ(0, 5.6, 0.3, 10), 8.5, 8.9, C));
+    m.tip = 8.9; m.tipZ = 5.6;
   } else {
-    // sloped armour on every face, wide tracks, big rubber-tyred wheels, cast T-34/85 turret, long 85, red star
-    const xo = 0.4, RS = [208, 40, 32];
-    add(prism(trackProf(-7.3, 7.1, 3.6), -4.4, -2.9, D)); add(prism(trackProf(-7.3, 7.1, 3.6), 2.9, 4.4, D));
-    add(roadWheels([-5.6, -2.8, 0, 2.8, 5.6], 1.85, 1.55, 4.45, [40, 40, 36], [88, 108, 62], [50, 56, 40]));
+    // T-34/85 (1944): 60° glacis and sloped upper sides, Christie suspension with five big rubber-tyred wheels,
+    // rear drive sprocket, external fuel tanks, large cast turret, 85 mm ZiS-S-53, turret number and roof cross
+    const RS = [208, 40, 32], W = WHITE, LT = [88, 110, 60];
+    m.pv = 0.8;
+    add(prism(trackProf(-7.5, 7.3, 2.4), -3.8, -2.5, D)); add(prism(trackProf(-7.5, 7.3, 2.4), 2.5, 3.8, D));
+    for (const x of [-5.4, -2.7, 0, 2.7, 5.4]) wheel(x, 1.04, 1.04, 3.82, [40, 40, 36], LT, [50, 56, 40]);
+    add(decal(circ(-6.95, 1.5, 0.85, 8), 3.82, [56, 60, 44], 0.3)); add(decal(circ(6.95, 1.25, 0.8, 10), 3.82, [56, 60, 44], 0.3));
     add(loft([
-      [-7.2, sym([[2.9, 1.6], [3.5, 2.8], [3.0, 4.4]])],
-      [-6.2, sym([[2.9, 1.6], [4.4, 3.4], [3.3, 5.3]])],
-      [4.4, sym([[2.9, 1.6], [4.4, 3.4], [3.3, 5.3]])],
-      [7.5, sym([[2.9, 1.6], [3.6, 2.6], [3.0, 2.9]])],
+      [-7.6, sym([[2.4, 1.0], [2.4, 2.0], [3.5, 2.0], [2.7, 3.3]])],
+      [-6.9, sym([[2.4, 1.0], [2.4, 2.3], [3.8, 2.3], [2.95, 4.1]])],
+      [4.6, sym([[2.4, 1.0], [2.4, 2.3], [3.8, 2.3], [2.95, 4.1]])],
+      [7.6, sym([[2.4, 1.0], [2.4, 1.6], [3.4, 1.6], [3.0, 1.9]])],
     ], C));
-    add(tube(circ(3.95, 4.25, 0.62, 8), -5.8, -3.2, [62, 82, 46])); add(tube(circ(-3.95, 4.25, 0.62, 8), -5.8, -3.2, [62, 82, 46]));
-    add(box(-7.6, -7.0, -1.7, -1.0, 2.8, 3.5, [74, 62, 46])); add(box(-7.6, -7.0, 1.0, 1.7, 2.8, 3.5, [74, 62, 46]));
+    const gl = Math.hypot(3.0, 2.2), gO = [4.6, 0, 4.1], gU = [3.0 / gl, 0, -2.2 / gl], gV = [0, 1, 0], gN = [2.2 / gl, 0, 3.0 / gl];
+    add(plate(rect(0.5, -1.9, 1.6, -0.5), gO, gU, gV, gN, LT, 0.35));
+    add(plate(rect(0.7, -1.5, 0.9, -0.9), gO, gU, gV, gN, [40, 44, 34], 0.42));
+    add(plate(circ(1.2, 1.3, 0.36, 8), gO, gU, gV, gN, [52, 64, 40], 0.4));
+    for (let k = 0; k < 3; k++) add(plate(rect(2.0 + k * 0.45, 0.6, 2.32 + k * 0.45, 2.4), gO, gU, gV, gN, [58, 56, 46], 0.35));
+    add(box(6.4, 6.8, -2.7, -2.25, 2.4, 2.8, [52, 56, 42]));
+    for (const s of [-1, 1]) { add(tube(circ(3.6 * s, 3.05, 0.48, 10), -6.4, -4.7, [64, 84, 46])); add(tube(circ(3.6 * s, 3.05, 0.48, 10), -4.4, -2.7, [64, 84, 46])); }
+    add(prism(circ(-7.95, 2.75, 0.5, 10), 0.5, 2.0, [64, 84, 46])); add(prism(circ(-7.95, 2.75, 0.5, 10), -2.0, -0.5, [64, 84, 46]));
+    add(box(-7.75, -7.45, -1.9, -1.3, 2.05, 2.55, [76, 62, 46])); add(box(-7.75, -7.45, 1.3, 1.9, 2.05, 2.55, [76, 62, 46]));
+    add(top(rect(-6.6, -2.0, -4.8, 2.0), 4.1, [60, 76, 42], 0.3)); add(top(rect(-4.5, -1.0, -2.9, 1.0), 4.1, LT, 0.3));
+    to('tur');
     add(loft([
-      [-3.6, sym([[2.0, 5.3], [2.4, 6.5], [1.6, 7.8]])],
-      [-2.4, sym([[3.0, 5.3], [3.2, 6.7], [2.3, 8.1]])],
-      [1.8, sym([[3.0, 5.3], [3.2, 6.7], [2.3, 8.1]])],
-      [3.2, sym([[2.0, 5.4], [2.2, 6.5], [1.4, 7.5]])],
-    ], C, xo));
-    add(decal(star(-0.1, 6.7, 1.05), 3.26, WHITE, 0.36)); add(decal(star(-0.1, 6.7, 0.8), 3.26, RS, 0.42));
-    f.push(top(rect(-2.4, -0.38, 2.0, 0.38), 8.1, WHITE, 0.35), top(rect(-0.6, -2.2, 0.16, 2.2), 8.1, WHITE, 0.36));
-    add(box(3.5, 4.4, -1.2, 1.2, 6.0, 7.4, [86, 108, 60]));
-    add(tube(circ(0, 6.75, 0.36, 8), 4.4, 14.2, C)); add(tube(circ(0, 6.75, 0.46, 8), 14.0, 14.7, C));
-    add(slab(circ(-1.0, -1.3, 0.9, 8), 8.0, 8.7, C));
-    add(mast(-5.6, -3.2, 5.3, 'USSR'));
-    tip = 14.7; tipZ = 6.75;
+      [-2.6, sym([[2.0, 4.1], [2.2, 5.0], [1.6, 6.3]])],
+      [-1.8, sym([[2.75, 4.1], [2.85, 5.3], [2.1, 6.5]])],
+      [2.0, sym([[2.75, 4.1], [2.85, 5.3], [2.1, 6.5]])],
+      [3.0, sym([[1.9, 4.2], [2.0, 5.2], [1.4, 6.1]])],
+    ], C));
+    add(stencil('24', -0.7, 4.72, 0.19, 2.88, W));
+    add(decal(star(1.3, 4.72, 0.55), 2.88, W, 0.36)); add(decal(star(1.3, 4.72, 0.4), 2.88, RS, 0.42));
+    add(top(rect(-1.8, -0.32, 2.0, 0.32), 6.5, W, 0.35)); add(top(rect(-0.2, -2.0, 0.45, 2.0), 6.5, W, 0.36));
+    add(slab(circ(-1.7, 0.75, 0.4, 8), 6.4, 6.78, C)); add(slab(circ(-1.7, -0.05, 0.4, 8), 6.4, 6.78, C));
+    add(slab(circ(-1.2, -1.3, 0.85, 12), 6.45, 7.0, C)); add(top(circ(-1.2, -1.3, 0.6, 12), 7.0, LT, 0.3));
+    add(box(3.0, 3.8, -1.15, 1.15, 4.6, 5.9, [88, 110, 62]));
+    add(mast(1.0, 2.2, 6.3, 'USSR'));
+    to('gun');
+    add(tube(circ(0, 5.25, 0.28, 10), 3.8, 12.5, C)); add(tube(circ(0, 5.25, 0.34, 10), 12.4, 12.9, C));
+    m.tip = 12.9; m.tipZ = 5.25;
   }
-  return { faces: f, tip, tipZ };
+  return m;
 }
 const MODELS = {}; TANKS.forEach(t => { MODELS[t.id] = buildModel(t.id); });
-const CRATE = [...prism(rect(-3, 0, 3, 6), -3, 3, [150, 112, 62]), ...decal(rect(-1.8, 1.2, 1.8, 4.8), 3.0, [222, 190, 70], 0.4), ...decal(crossP(0, 3, 1.4, 0.45), 3.0, [40, 34, 24], 0.5), top(rect(-2.4, -2.4, 2.4, 2.4), 6, [176, 134, 76], 0.3)];
+const CRATE = { hull: [...prism(rect(-3, 0, 3, 6), -3, 3, [150, 112, 62]), ...decal(rect(-1.8, 1.2, 1.8, 4.8), 3.0, [222, 190, 70], 0.4), ...decal(crossP(0, 3, 1.4, 0.45), 3.0, [40, 34, 24], 0.5), top(rect(-2.4, -2.4, 2.4, 2.4), 6, [176, 134, 76], 0.3)] };
+// sandbag wall: local x runs along the wall, y is its thickness
+const WALL = (() => {
+  const f = [], SB = [[178, 162, 120], [166, 150, 110], [186, 170, 128], [172, 156, 114]];
+  [[0, 1.3, 17, 3.0], [1.25, 2.5, 16.6, 2.7], [2.45, 3.6, 16.2, 2.4], [3.55, 4.6, 15.6, 2.1]].forEach(([z0, z1, hl, hw], r) => {
+    const sec = [[-hw, z0], [hw, z0], [hw * 1.06, (z0 + z1) / 2], [hw * 0.9, z1], [-hw * 0.9, z1], [-hw * 1.06, (z0 + z1) / 2]];
+    f.push(...extrude(sec, (y, z, x) => [x, y, z], -hl, hl, SB[r]));
+    for (let x = -hl + 2.2 + (r % 2) * 1.1; x < hl - 1; x += 2.2) f.push(top(rect(x - 0.12, -hw * 0.88, x + 0.12, hw * 0.88), z1, [120, 108, 78], 0.3));
+  });
+  f.push(...box(-18, -17, -0.5, 0.5, 0, 6.4, [96, 72, 46]), ...box(17, 18, -0.5, 0.5, 0, 6.4, [96, 72, 46]));
+  f.push(...box(-1.2, -1.0, 1.0, 4.2, 4.6, 4.85, [36, 36, 32]));
+  return { hull: f };
+})();
+const RUBBLE = (() => {
+  const f = [];
+  [[-12, -6, 1.2], [-4, 3, 1.6], [6, 13, 1.0], [-15, -10, 0.7], [11, 16, 0.6]].forEach(([x0, x1, h], i) => f.push(...box(x0, x1, -3.4 + i * 0.4, 2.6 - i * 0.3, 0, h, [150, 136, 100])));
+  f.push(top(rect(-17, -4, 17, 4), 0.05, [92, 82, 62], 0.2));
+  return { hull: f };
+})();
 
 // ---------------------------------------------------------------- projection
 const LIGHT = (() => { const l = [0.35, -0.45, 0.82], m = Math.hypot(...l); return l.map(v => v / m); })();
@@ -369,31 +464,44 @@ function project(cam, x, y, z) {
   const s = dx * cam.rx + dy * cam.ry;
   return [cam.cx + s * cam.F / d, cam.hz + (cam.h - z) * cam.F / d, d];
 }
-function drawModel(ctx, cam, faces, x, y, a, tint) {
+// draws a model's hull, turret (turned st.tur about x = pv) and gun (recoiling st.recoil)
+function drawModel(ctx, cam, m, x, y, a, tint, st) {
   const ca = Math.cos(a), sa = Math.sin(a);
+  const tur = st ? st.tur || 0 : 0, rec = st ? st.recoil || 0 : 0, ct = Math.cos(tur), stn = Math.sin(tur), pv = m.pv || 0;
   const list = [];
-  for (const fc of faces) {
-    const nx = fc.n[0] * ca - fc.n[1] * sa, ny = fc.n[0] * sa + fc.n[1] * ca, nz = fc.n[2];
-    let mx = 0, my = 0, mz = 0;
-    const pts = []; let ok = true, dsum = 0;
-    for (const v of fc.v) {
-      const wx = x + v[0] * ca - v[1] * sa, wy = y + v[0] * sa + v[1] * ca, wz = v[2];
-      mx += wx; my += wy; mz += wz;
-      const p = project(cam, wx, wy, wz);
-      if (p[2] < 1.5) { ok = false; break; }
-      pts.push(p); dsum += p[2];
+  const groups = [[m.hull, 0], [m.tur, 1], [m.gun, 2]];
+  if (st && st.dyn) groups.push([st.dyn, 0]);
+  for (const [faces, kind] of groups) {
+    if (!faces) continue;
+    for (const fc of faces) {
+      let lnx = fc.n[0], lny = fc.n[1];
+      if (kind) { const q = lnx * ct - lny * stn; lny = lnx * stn + lny * ct; lnx = q; }
+      const nx = lnx * ca - lny * sa, ny = lnx * sa + lny * ca, nz = fc.n[2];
+      let mx = 0, my = 0, mz = 0;
+      const pts = []; let ok = true, dsum = 0;
+      for (const v of fc.v) {
+        let lx = v[0], ly = v[1];
+        if (kind === 2) lx -= rec;
+        if (kind) { const dx = lx - pv; lx = pv + dx * ct - ly * stn; ly = dx * stn + ly * ct; }
+        const wx = x + lx * ca - ly * sa, wy = y + lx * sa + ly * ca, wz = v[2];
+        mx += wx; my += wy; mz += wz;
+        const p = project(cam, wx, wy, wz);
+        if (p[2] < 1.5) { ok = false; break; }
+        pts.push(p); dsum += p[2];
+      }
+      if (!ok) continue;
+      const k = fc.v.length; mx /= k; my /= k; mz /= k;
+      if (nx * (mx - cam.x) + ny * (my - cam.y) + nz * (mz - cam.h) >= 0) continue;
+      const b = 0.5 + 0.48 * Math.max(0, nx * LIGHT[0] + ny * LIGHT[1] + nz * LIGHT[2]) + 0.1 * Math.max(0, nz) - 0.08 * Math.max(0, -nz);
+      let r = fc.c[0] * b, gg = fc.c[1] * b, bb = fc.c[2] * b;
+      if (tint) {
+        if (tint.mul) { r *= tint.mul; gg *= tint.mul; bb *= tint.mul; }
+        if (tint.flash) { const f = tint.flash; r += (255 - r) * f; gg += (240 - gg) * f; bb += (200 - bb) * f; }
+      }
+      r = Math.min(255, r); gg = Math.min(255, gg); bb = Math.min(255, bb);
+      const e = fc.bias || fc.edge === false ? 1 : 0.7;
+      list.push({ pts, d: dsum / k - (fc.bias || 0), col: `rgb(${r | 0},${gg | 0},${bb | 0})`, edge: `rgb(${r * e | 0},${gg * e | 0},${bb * e | 0})` });
     }
-    if (!ok) continue;
-    const k = fc.v.length; mx /= k; my /= k; mz /= k;
-    if (nx * (mx - cam.x) + ny * (my - cam.y) + nz * (mz - cam.h) >= 0) continue;
-    let b = 0.58 + 0.5 * Math.max(0, nx * LIGHT[0] + ny * LIGHT[1] + nz * LIGHT[2]);
-    let r = fc.c[0] * b, gg = fc.c[1] * b, bb = fc.c[2] * b;
-    if (tint) {
-      if (tint.mul) { r *= tint.mul; gg *= tint.mul; bb *= tint.mul; }
-      if (tint.flash) { const f = tint.flash; r += (255 - r) * f; gg += (240 - gg) * f; bb += (200 - bb) * f; }
-    }
-    const e = fc.bias || fc.edge === false ? 1 : 0.68;
-    list.push({ pts, d: dsum / k - (fc.bias || 0), col: `rgb(${r | 0},${gg | 0},${bb | 0})`, edge: `rgb(${r * e | 0},${gg * e | 0},${bb * e | 0})` });
   }
   list.sort((p, q) => q.d - p.d);
   for (const f of list) {
@@ -402,6 +510,18 @@ function drawModel(ctx, cam, faces, x, y, a, tint) {
     for (let i = 1; i < f.pts.length; i++) ctx.lineTo(f.pts[i][0], f.pts[i][1]);
     ctx.closePath(); ctx.fill(); ctx.stroke();
   }
+}
+// rotating bolt heads on the road wheels, so wheels visibly turn
+function wheelDyn(t) {
+  const m = t.model, out = [];
+  for (const w of m.wheels) {
+    const ph = t.odo / (w.r * 1.8);
+    for (const k of [0, 1, 2]) {
+      const a = ph + k * TAU / 3, cx = w.x + Math.cos(a) * w.r * 0.7, cz = w.z + Math.sin(a) * w.r * 0.7, h = 0.13;
+      out.push(...decal(rect(cx - h, cz - h, cx + h, cz + h), m.wy, [36, 36, 32], w.b));
+    }
+  }
+  return out;
 }
 
 // ---------------------------------------------------------------- tracks
@@ -592,19 +712,34 @@ function newRace(opts) {
     return {
       type, model: MODELS[id], x: p.x + p.nx * side * 18, y: p.y + p.ny * side * 18, a: p.a, speed: 0,
       hp: 100, reload: 0, item: null, itemN: 0, stun: 0, spin: 1, dead: 0, inv: 0, turbo: 0, flash: 0, bump: 0,
+      tur: 0, recoil: 0, odo: 0, hitT: 0, lock: null, walls: 0, men: 0,
       idx, lap: 0, lapStart: 0, best: Infinity, finished: false, finishTime: 0, prog: 0,
       isPlayer: !opts.demo && id === opts.tank,
       ai: { lane: (rng() - 0.5) * 36, phase: rng() * TAU, dodge: 0, stuck: 0, rev: 0, think: 0 },
     };
   });
-  const objs = { crates: [], hogs: [], mines: [], shells: [], parts: [], strikes: [] };
+  const objs = { crates: [], hogs: [], mines: [], shells: [], parts: [], strikes: [], blocks: [], tracers: [] };
+  // infantry roadblocks: two staggered sandbag walls forming a chicane, riflemen and an MG behind them, an anti-tank team on the verge
+  const BLOCKS = [0.36, 0.64, 0.9];
+  BLOCKS.forEach((f, k) => {
+    const i = Math.floor(N * f), side = k % 2 ? 1 : -1, walls = [], men = [];
+    [[0, side], [6, -side]].forEach(([j, sd], wi) => {
+      const p = T.pts[(i + j) % N], off = sd * (RW - 20);
+      const w = { x: p.x + p.nx * off, y: p.y + p.ny * off, a: Math.atan2(p.ny, p.nx), half: 17, hp: 2, nx: p.nx, ny: p.ny, tx: p.tx, ty: p.ty, flash: 0 };
+      walls.push(w);
+      for (const l of [-10, 0, 10]) men.push(soldier(w.x + p.tx * 6 + p.nx * l, w.y + p.ty * 6 + p.ny * l, wi === 0 && l === 0 ? 'mg' : 'rifle'));
+    });
+    const p = T.pts[(i + 3) % N];
+    men.push(soldier(p.x + p.nx * side * (RW + 16), p.y + p.ny * side * (RW + 16), 'at'));
+    objs.blocks.push({ walls, men, clearT: -1 });
+  });
   for (const f of [0.22, 0.52, 0.78]) {
     const i = Math.floor(N * f), p = T.pts[i];
     for (const off of [-26, 0, 26]) objs.crates.push({ x: p.x + p.nx * off, y: p.y + p.ny * off, on: true, t: 0 });
   }
   const r2 = mulberry32(T.def.seed * 7);
   for (let k = 0; k < 7; k++) {
-    let f; do { f = 0.08 + r2() * 0.86; } while ([0.22, 0.52, 0.78].some(c => Math.abs(c - f) < 0.05));
+    let f; do { f = 0.08 + r2() * 0.86; } while ([0.22, 0.52, 0.78, 0.36, 0.64, 0.9].some(c => Math.abs(c - f) < 0.05));
     const p = T.pts[Math.floor(N * f)], off = (r2() < 0.5 ? -1 : 1) * (10 + r2() * 26);
     objs.hogs.push({ x: p.x + p.nx * off, y: p.y + p.ny * off, a: r2() * TAU });
   }
@@ -613,6 +748,12 @@ function newRace(opts) {
   const fTank = r.player || tanks[0];
   camA = fTank.a; camX = fTank.x; camY = fTank.y;
   return r;
+}
+
+function soldier(x, y, kind) { return { x, y, kind, alive: true, dead: 0, cd: rand(0.5, 2.5), burst: 0, gap: 0, flash: 0, face: 0 }; }
+function resetBlock(b) {
+  b.walls.forEach(w => { w.hp = 2; }); b.clearT = -1;
+  b.men.forEach(m => { m.alive = true; m.dead = 0; m.cd = rand(1, 3); m.burst = 0; });
 }
 
 function say(text, color = '#efe6cf', dur = 1.6) { if (R) R.msgs.push({ text, color, t: dur }); }
@@ -666,30 +807,98 @@ function explode(x, y, z, big) {
   if (f && Math.hypot(x - f.x, y - f.y) < 120) shake = Math.max(shake, big ? 0.45 : 0.2);
 }
 
-function damage(t, amt, by) {
+function damage(t, amt, by, light = false) {
   if (t.inv > 0 || t.dead > 0 || (R.count > 0)) return;
   t.hp -= amt * t.type.taken;
-  t.flash = 0.25; t.stun = 0.75; t.spin = Math.random() < 0.5 ? -1 : 1;
+  if (light) {
+    t.flash = Math.max(t.flash, 0.06); t.hitT = 0.35;
+    if (t.isPlayer && Math.random() < 0.35) blip(1500 + rand(0, 700), 0.03, 'square', 0.035);
+  } else { t.flash = 0.25; t.stun = 0.75; t.spin = Math.random() < 0.5 ? -1 : 1; }
   if (t.hp <= 0) {
     t.hp = 0; t.dead = 2.6; t.stun = 0; t.speed = 0; t.turbo = 0;
     explode(t.x, t.y, 6, true);
     if (t.isPlayer) say('KNOCKED OUT!', '#e0592a', 2.2);
     else if (by && by.isPlayer) say(`${t.type.name.toUpperCase()} KNOCKED OUT`, '#f2c14e');
-  } else {
+  } else if (!light) {
     if (t.isPlayer) say('HIT!', '#e0592a', 0.8);
     else if (by && by.isPlayer) say(`HIT ${t.type.name.toUpperCase()}`, '#f2c14e', 0.9);
   }
 }
 
 function fire(t, off = 0, mul = 1) {
-  const ca = Math.cos(t.a + off), sa = Math.sin(t.a + off), m = t.model;
-  const x = t.x + Math.cos(t.a) * m.tip, y = t.y + Math.sin(t.a) * m.tip;
+  const m = t.model, dir = t.a + t.tur + off, ca = Math.cos(dir), sa = Math.sin(dir);
+  const dx = m.tip - m.pv, lx = m.pv + dx * Math.cos(t.tur), ly = dx * Math.sin(t.tur);
+  const x = t.x + lx * Math.cos(t.a) - ly * Math.sin(t.a), y = t.y + lx * Math.sin(t.a) + ly * Math.cos(t.a);
+  t.recoil = 0.9;
+  for (let i = 0; i < 5; i++) { const a = rand(0, TAU); R.objs.parts.push({ x, y, z: 1, vx: Math.cos(a) * 26, vy: Math.sin(a) * 26, vz: 2, life: 0.5, max: 0.5, size: 2.5, kind: 'dust' }); }
   const sp = 430 + Math.max(0, t.speed);
   R.objs.shells.push({ x, y, z: m.tipZ, vx: ca * sp, vy: sa * sp, life: 1.25, owner: t, dmg: t.type.dmg * mul });
-  R.objs.parts.push({ x: x + ca * 2, y: y + sa * 2, z: m.tipZ, vx: 0, vy: 0, vz: 0, life: 0.09, max: 0.09, size: 4, kind: 'flash' });
+  R.objs.parts.push({ x: x + ca * 2, y: y + sa * 2, z: m.tipZ, vx: 0, vy: 0, vz: 0, life: 0.08, max: 0.08, size: 2.4, kind: 'flash' });
   for (let i = 0; i < 3; i++) R.objs.parts.push({ x, y, z: m.tipZ, vx: ca * 20 + rand(-8, 8), vy: sa * 20 + rand(-8, 8), vz: rand(2, 8), life: 0.6, max: 0.6, size: 3, kind: 'smoke' });
   t.speed -= 10;
   boom(0.32 * (t.isPlayer ? 1 : distVol(t.x, t.y)), 0.35, 1800);
+}
+
+// the gunner picks the best target in a 45° arc either side of the hull and traverses towards it
+function aimTarget(t) {
+  let best = null, bs = Infinity;
+  const consider = (o, x, y, maxD, w) => {
+    const dx = x - t.x, dy = y - t.y, d = Math.hypot(dx, dy);
+    if (d < 18 || d > maxD) return;
+    const ang = Math.atan2(dy, dx), da = Math.abs(wrapA(ang - t.a));
+    if (da > 0.78) return;
+    const sc = da * 300 + d * w;
+    if (sc < bs) { bs = sc; best = { o, x, y, ang, d }; }
+  };
+  for (const o of R.tanks) if (o !== t && o.dead <= 0) consider(o, o.x, o.y, 380, 1);
+  for (const b of R.objs.blocks) {
+    for (const w of b.walls) if (w.hp > 0) consider(w, w.x, w.y, 320, 1.15);
+    for (const m of b.men) if (m.alive) consider(m, m.x, m.y, 280, 1.25);
+  }
+  return best;
+}
+function wallDist(w, x, y) {
+  const dx = x - w.x, dy = y - w.y, al = clamp(dx * w.nx + dy * w.ny, -w.half, w.half);
+  return Math.hypot(dx - w.nx * al, dy - w.ny * al);
+}
+function killSoldier(m, by) {
+  if (!m.alive) return;
+  m.alive = false; m.dead = 0;
+  R.objs.parts.push({ x: m.x, y: m.y, z: 1, vx: 0, vy: 0, vz: 4, life: 0.6, max: 0.6, size: 2.5, kind: 'dust' });
+  if (by && by.isPlayer) by.men++;
+}
+function destroyWall(w, b, by, rammed) {
+  if (w.hp <= 0 && !rammed) return;
+  w.hp = 0;
+  explode(w.x, w.y, 2, true);
+  for (let i = 0; i < 10; i++) R.objs.parts.push({ x: w.x + w.nx * rand(-15, 15), y: w.y + w.ny * rand(-15, 15), z: rand(1, 4), vx: rand(-20, 20), vy: rand(-20, 20), vz: rand(6, 20), life: 1.2, max: 1.2, size: rand(3, 6), kind: 'dust' });
+  for (const m of b.men) if (Math.hypot(m.x - w.x, m.y - w.y) < 22) killSoldier(m, by);
+  if (by && by.isPlayer) { by.walls++; say(rammed ? 'ROADBLOCK SMASHED' : 'ROADBLOCK DESTROYED', '#f2c14e', 1.4); }
+}
+// splash from shells, mines and artillery: kills infantry and breaks sandbags
+function blast(x, y, r, by) {
+  for (const b of R.objs.blocks) {
+    for (const m of b.men) if (m.alive && Math.hypot(m.x - x, m.y - y) < r) killSoldier(m, by);
+    for (const w of b.walls) if (w.hp > 0 && wallDist(w, x, y) < r * 0.5) { w.hp--; w.flash = 0.2; if (w.hp <= 0) destroyWall(w, b, by, false); }
+  }
+}
+function smallArms(m, tg, d, dmg, pmul) {
+  const p = clamp((0.85 - d / 450 - Math.abs(tg.speed) / 520) * pmul * (R.diff.id === 'recruit' ? 0.7 : 1), 0.06, 0.85), hit = Math.random() < p;
+  const ex = tg.x + (hit ? rand(-2, 2) : rand(-16, 16)), ey = tg.y + (hit ? rand(-2, 2) : rand(-16, 16));
+  R.objs.tracers.push({ x1: m.x, y1: m.y, z1: m.kind === 'mg' ? 2.2 : 3.4, x2: ex, y2: ey, z2: hit ? rand(2, 5) : 0.5, life: 0.07 });
+  m.flash = 0.06;
+  if (hit) { damage(tg, dmg, null, true); if (Math.random() < 0.5) R.objs.parts.push({ x: ex, y: ey, z: rand(2, 5), vx: rand(-10, 10), vy: rand(-10, 10), vz: rand(4, 12), life: 0.15, max: 0.15, size: 0.8, kind: 'fire' }); }
+  else R.objs.parts.push({ x: ex, y: ey, z: 0.5, vx: 0, vy: 0, vz: 6, life: 0.35, max: 0.35, size: 1.2, kind: 'dust' });
+  boom(0.09 * distVol(m.x, m.y), 0.05, 3800);
+}
+function launchRocket(m, tg) {
+  const d = Math.hypot(tg.x - m.x, tg.y - m.y), tt = d / 300;
+  const ax = tg.x + Math.cos(tg.a) * tg.speed * tt * 0.8, ay = tg.y + Math.sin(tg.a) * tg.speed * tt * 0.8;
+  const a = Math.atan2(ay - m.y, ax - m.x) + rand(-0.05, 0.05);
+  R.objs.shells.push({ x: m.x, y: m.y, z: 3.2, vx: Math.cos(a) * 300, vy: Math.sin(a) * 300, life: 1.3, owner: m, dmg: 24, rocket: true });
+  m.flash = 0.25;
+  for (let i = 0; i < 4; i++) R.objs.parts.push({ x: m.x - Math.cos(a) * 3, y: m.y - Math.sin(a) * 3, z: 3, vx: -Math.cos(a) * 30 + rand(-6, 6), vy: -Math.sin(a) * 30 + rand(-6, 6), vz: rand(2, 6), life: 0.8, max: 0.8, size: 3, kind: 'smoke' });
+  boom(0.3 * distVol(m.x, m.y), 0.5, 900);
 }
 
 function leaderFor(t) { return rankings().find(o => o !== t && !o.finished && o.dead <= 0) || null; }
@@ -761,6 +970,7 @@ function aiControl(t, dt) {
   for (const h of R.objs.hogs) avoid(h.x, h.y, 15);
   for (const m of R.objs.mines) avoid(m.x, m.y, 13);
   for (const o of R.tanks) if (o !== t && o.dead > 0) avoid(o.x, o.y, 16);
+  for (const b of R.objs.blocks) for (const w of b.walls) if (w.hp > 0) for (const al of [-15, -7.5, 0, 7.5, 15]) avoid(w.x + w.nx * al, w.y + w.ny * al, 12);
   ai.dodge = clamp(ai.dodge, -34, 34);
   const lane = clamp(ai.lane + Math.sin(R.time * 0.3 + ai.phase) * 10 + ai.dodge, -RW + 10, RW - 10);
   const tx = p.x + p.nx * lane, ty = p.y + p.ny * lane;
@@ -774,11 +984,8 @@ function aiControl(t, dt) {
   if (ai.think <= 0) {
     ai.think = 0.12;
     const aim = R.diff.aim;
-    if (t.reload <= 0 && R.time > 2.5) for (const o of R.tanks) {
-      if (o === t || o.dead > 0) continue;
-      const dx = o.x - t.x, dy = o.y - t.y, d = Math.hypot(dx, dy);
-      if (d > 30 && d < 300 && Math.abs(wrapA(Math.atan2(dy, dx) - t.a)) < 0.11 && Math.random() < aim * 0.6) { fireNow = true; break; }
-    }
+    const L = t.lock;
+    if (t.reload <= 0 && R.time > 2.5 && L && L.d > 25 && L.d < 320 && Math.abs(wrapA(L.ang - t.a - t.tur)) < 0.05 && Math.random() < aim * 0.7) fireNow = true;
     if (t.item) {
       const it = t.item;
       if (it === 'TURBO' && Math.abs(diff) < 0.15 && t.speed > t.type.max * 0.6) useItem(t);
@@ -814,6 +1021,10 @@ function updateTank(t, dt, ctrl) {
     return;
   }
   t.inv = Math.max(0, t.inv - dt); t.reload = Math.max(0, t.reload - dt); t.turbo = Math.max(0, t.turbo - dt);
+  t.recoil = Math.max(0, t.recoil - dt * 2.5); t.hitT = Math.max(0, t.hitT - dt); t.odo += t.speed * dt;
+  t.lock = aimTarget(t);
+  const turT = t.lock ? clamp(wrapA(t.lock.ang - t.a), -0.78, 0.78) : 0;
+  t.tur += clamp(wrapA(turT - t.tur), -st.trav * dt, st.trav * dt);
   const onRoad = T.onRoadAt(t.x, t.y);
   if (t.stun > 0) {
     t.stun -= dt; t.a += t.spin * 8 * dt; t.speed *= Math.pow(0.08, dt);
@@ -839,6 +1050,17 @@ function updateTank(t, dt, ctrl) {
     if (d < m) {
       nx = h.x + dx / d * m; ny = h.y + dy / d * m;
       if (t.bump <= 0) { t.speed *= -0.25; t.bump = 0.5; damage(t, 6, null); if (distVol(t.x, t.y) > 0) boom(0.25 * distVol(t.x, t.y), 0.2, 700); }
+    }
+  }
+  for (const b of R.objs.blocks) for (const w of b.walls) {
+    if (w.hp <= 0) continue;
+    const dx = nx - w.x, dy = ny - w.y, al = dx * w.nx + dy * w.ny, ac = dx * w.tx + dy * w.ty;
+    if (Math.abs(al) > w.half + 5 || Math.abs(ac) > 9) continue;
+    if (t.speed > st.max * 0.62) { destroyWall(w, b, t, true); t.speed *= 0.55; damage(t, 8, null); }
+    else {
+      const sg = ac >= 0 ? 1 : -1;
+      nx = w.x + w.nx * al + w.tx * sg * 9; ny = w.y + w.ny * al + w.ty * sg * 9;
+      if (t.bump <= 0) { t.speed *= -0.3; t.bump = 0.4; boom(0.2 * distVol(t.x, t.y), 0.15, 500); }
     }
   }
   t.x = clamp(nx, 20, TS - 20); t.y = clamp(ny, 20, TS - 20);
@@ -882,20 +1104,63 @@ function step(dt) {
   }
   // shells
   for (let i = o.shells.length - 1; i >= 0; i--) {
-    const s = o.shells[i];
-    s.x += s.vx * dt; s.y += s.vy * dt; s.life -= dt;
+    const s = o.shells[i], fromTank = !!(s.owner && s.owner.type);
     let hit = false;
-    for (const t of R.tanks) if (t !== s.owner && t.dead <= 0 && Math.hypot(t.x - s.x, t.y - s.y) < 10) { damage(t, s.dmg, s.owner); hit = true; break; }
-    if (!hit) for (const tr of T.trees) if (Math.hypot(tr.x - s.x, tr.y - s.y) < tr.r + 2) { hit = true; break; }
-    if (!hit) for (const h of o.hogs) if (Math.hypot(h.x - s.x, h.y - s.y) < 7) { hit = true; break; }
-    if (hit || s.life <= 0 || s.x < 0 || s.y < 0 || s.x > TS || s.y > TS) { explode(s.x, s.y, hit ? s.z : 1, false); o.shells.splice(i, 1); }
+    for (let sub = 0; sub < 2 && !hit; sub++) {
+      s.x += s.vx * dt / 2; s.y += s.vy * dt / 2;
+      for (const t of R.tanks) if (t !== s.owner && t.dead <= 0 && Math.hypot(t.x - s.x, t.y - s.y) < 10) { damage(t, s.dmg, fromTank ? s.owner : null); hit = true; break; }
+      if (!hit) for (const tr of T.trees) if (Math.hypot(tr.x - s.x, tr.y - s.y) < tr.r + 2) { hit = true; break; }
+      if (!hit) for (const h of o.hogs) if (Math.hypot(h.x - s.x, h.y - s.y) < 7) { hit = true; break; }
+      if (!hit && fromTank) for (const b of o.blocks) {
+        for (const w of b.walls) if (w.hp > 0 && wallDist(w, s.x, s.y) < 4.5) { w.hp -= s.dmg >= 40 ? 2 : 1; w.flash = 0.2; if (w.hp <= 0) destroyWall(w, b, s.owner, false); hit = true; }
+        for (const m of b.men) if (m.alive && Math.hypot(m.x - s.x, m.y - s.y) < 5) { killSoldier(m, s.owner); hit = true; }
+      }
+    }
+    s.life -= dt;
+    if (s.rocket && Math.random() < dt * 50) o.parts.push({ x: s.x, y: s.y, z: s.z, vx: rand(-3, 3), vy: rand(-3, 3), vz: rand(1, 4), life: 0.7, max: 0.7, size: 1.8, kind: 'smoke' });
+    if (hit || s.life <= 0 || s.x < 0 || s.y < 0 || s.x > TS || s.y > TS) {
+      explode(s.x, s.y, hit ? s.z : 1, false);
+      if (fromTank) blast(s.x, s.y, 14, s.owner);
+      o.shells.splice(i, 1);
+    }
   }
+  // roadblocks: infantry pick the nearest tank and open fire
+  for (const b of o.blocks) {
+    let alive = 0;
+    for (const w of b.walls) w.flash = Math.max(0, w.flash - dt);
+    for (const m of b.men) {
+      if (!m.alive) { m.dead += dt; continue; }
+      alive++;
+      m.flash = Math.max(0, m.flash - dt); m.cd -= dt;
+      for (const t of R.tanks) if (t.dead <= 0 && Math.hypot(t.x - m.x, t.y - m.y) < 7) { killSoldier(m, t); break; }
+      if (!m.alive) continue;
+      const range = m.kind === 'at' ? 230 : m.kind === 'mg' ? 300 : 280;
+      let tg = null, td = range;
+      for (const t of R.tanks) { if (t.dead > 0 || t.inv > 0) continue; const d = Math.hypot(t.x - m.x, t.y - m.y); if (d < td) { td = d; tg = t; } }
+      if (!tg) { m.burst = 0; continue; }
+      m.face = Math.atan2(tg.y - m.y, tg.x - m.x);
+      if (R.count > 0 || R.time < 3) continue;
+      if (m.kind === 'mg') {
+        if (m.burst > 0) { m.burst -= dt; m.gap -= dt; if (m.gap <= 0) { m.gap = 0.09; smallArms(m, tg, td, 0.9, 0.55); } if (m.burst <= 0) m.cd = rand(1.4, 2.4); }
+        else if (m.cd <= 0) { m.burst = 1.1; m.gap = 0; }
+      } else if (m.cd <= 0) {
+        if (m.kind === 'rifle') { smallArms(m, tg, td, 2.2, 1); m.cd = rand(1.3, 2.4); }
+        else { launchRocket(m, tg); m.cd = rand(5, 6.5); }
+      }
+    }
+    if (!alive) {
+      if (b.clearT < 0) b.clearT = 25;
+      b.clearT -= dt;
+      if (b.clearT <= 0 && R.tanks.every(t => Math.hypot(t.x - b.walls[0].x, t.y - b.walls[0].y) > 260)) resetBlock(b);
+    }
+  }
+  for (let i = o.tracers.length - 1; i >= 0; i--) { o.tracers[i].life -= dt; if (o.tracers[i].life <= 0) o.tracers.splice(i, 1); }
   // mines
   for (let i = o.mines.length - 1; i >= 0; i--) {
     const m = o.mines[i]; m.arm -= dt;
     if (m.arm > 0) continue;
     const t = R.tanks.find(t => t.dead <= 0 && Math.hypot(t.x - m.x, t.y - m.y) < 10);
-    if (t) { damage(t, 35, m.owner); explode(m.x, m.y, 1, true); o.mines.splice(i, 1); }
+    if (t) { damage(t, 35, m.owner); explode(m.x, m.y, 1, true); blast(m.x, m.y, 16, m.owner); o.mines.splice(i, 1); }
   }
   // artillery
   for (let i = o.strikes.length - 1; i >= 0; i--) {
@@ -904,6 +1169,7 @@ function step(dt) {
       const x = s.target.x + rand(-14, 14), y = s.target.y + rand(-14, 14);
       explode(x, y, 2, true); explode(x + rand(-12, 12), y + rand(-12, 12), 2, false);
       for (const t of R.tanks) if (t !== s.owner && Math.hypot(t.x - x, t.y - y) < 28) damage(t, 40, s.owner);
+      blast(x, y, 30, s.owner);
       o.strikes.splice(i, 1);
     }
   }
@@ -1035,6 +1301,11 @@ function render() {
     return d;
   };
   for (const tr of T.trees) { const d = vis(tr.x, tr.y); if (d > 0) items.push({ d, k: 'tree', o: tr }); }
+  for (const b of R.objs.blocks) {
+    for (const w of b.walls) { const d = vis(w.x, w.y, 1100); if (d > 0) items.push({ d, k: 'wall', o: w }); }
+    for (const m of b.men) { if (!m.alive && m.dead > 4) continue; const d = vis(m.x, m.y, 900); if (d > 0) items.push({ d, k: 'man', o: m }); }
+  }
+  for (const tr of R.objs.tracers) { const d = vis((tr.x1 + tr.x2) / 2, (tr.y1 + tr.y2) / 2, 900); if (d > 0) items.push({ d, k: 'tracer', o: tr }); }
   for (const t of R.tanks) { const d = vis(t.x, t.y); if (d > 0) items.push({ d, k: 'tank', o: t }); }
   for (const c of R.objs.crates) if (c.on) { const d = vis(c.x, c.y, 900); if (d > 0) items.push({ d, k: 'crate', o: c }); }
   for (const h of R.objs.hogs) { const d = vis(h.x, h.y, 1000); if (d > 0) items.push({ d, k: 'hog', o: h }); }
@@ -1051,14 +1322,22 @@ function render() {
       if (o.inv > 0 && Math.floor(o.inv * 10) % 2 === 0) continue;
       // shadow
       const ca = Math.cos(o.a), sa = Math.sin(o.a);
-      const corners = [[-9, -5.5], [9, -5.5], [9, 5.5], [-9, 5.5]].map(([lx, ly]) => project(cam, o.x + lx * ca - ly * sa, o.y + lx * sa + ly * ca, 0));
+      const corners = [[-8.6, -4.6], [8.2, -4.6], [8.2, 4.6], [-8.6, 4.6]].map(([lx, ly]) => project(cam, o.x + lx * ca - ly * sa - 1.6, o.y + lx * sa + ly * ca + 2.0, 0));
       if (corners.every(p => p[2] > 1.5)) {
         g.fillStyle = 'rgba(0,0,0,.32)'; g.beginPath(); corners.forEach((p, i) => i ? g.lineTo(p[0], p[1]) : g.moveTo(p[0], p[1])); g.closePath(); g.fill();
       }
-      drawModel(g, cam, o.model.faces, o.x, o.y, o.a, o.dead > 0 ? { mul: 0.35 } : o.flash > 0 ? { flash: o.flash * 3 } : null);
-      if (it.d < 760 && (!o.isPlayer || R.count > 0)) { const p = project(cam, o.x, o.y, 17); tags.push({ x: p[0], y: p[1], t: o, d: it.d }); }
+      drawModel(g, cam, o.model, o.x, o.y, o.a, o.dead > 0 ? { mul: 0.35 } : o.flash > 0 ? { flash: o.flash * 3 } : null, { tur: o.tur, recoil: o.recoil, dyn: it.d < 240 ? wheelDyn(o) : null });
+      if (it.d < 760 && (!o.isPlayer || R.count > 0)) { const p = project(cam, o.x, o.y, 13); tags.push({ x: p[0], y: p[1], t: o, d: it.d }); }
     } else if (it.k === 'crate') {
       drawModel(g, cam, CRATE, o.x, o.y, R.time * 1.5 + o.x, null);
+    } else if (it.k === 'wall') {
+      drawModel(g, cam, o.hp > 0 ? WALL : RUBBLE, o.x, o.y, o.a, o.flash > 0 ? { flash: o.flash * 2 } : null);
+    } else if (it.k === 'man') {
+      drawSoldier(o, project(cam, o.x, o.y, 0), s);
+    } else if (it.k === 'tracer') {
+      const a = project(cam, o.x1, o.y1, o.z1), b = project(cam, o.x2, o.y2, o.z2);
+      if (a[2] < 2 || b[2] < 2) continue;
+      g.strokeStyle = 'rgba(255,224,140,.9)'; g.lineWidth = 1; g.beginPath(); g.moveTo(a[0], a[1]); g.lineTo(b[0], b[1]); g.stroke();
     } else if (it.k === 'hog') {
       const ca = Math.cos(o.a), sa = Math.sin(o.a);
       const beams = [[[-5, -1.5, 0], [5, 1.5, 8]], [[3, -5, 0], [-3, 5, 8]], [[-2, 5, 0], [2, -5, 8]]];
@@ -1094,10 +1373,55 @@ function render() {
       g.beginPath(); pts.forEach((p, i) => i ? g.lineTo(p[0], p[1]) : g.moveTo(p[0], p[1])); g.closePath(); g.stroke();
     }
   }
+  lockMark = null;
+  const pl = R.player;
+  if (pl && pl.lock && pl.dead <= 0 && state === 'race') {
+    const L = pl.lock, p = project(cam, L.x, L.y, L.o.type ? 4 : 2.5);
+    if (p[2] > 4) lockMark = { x: p[0], y: p[1], r: clamp(9 * F / p[2], 7, 40), ok: Math.abs(wrapA(L.ang - pl.a - pl.tur)) < 0.04 && pl.reload <= 0 };
+  }
   sx.setTransform(1, 0, 0, 1, 0, 0);
   sx.drawImage(lo, 0, 0, scr.width, scr.height);
 }
 const tags = [];
+let lockMark = null;
+
+// infantry: a small figure in field uniform and steel helmet, facing whoever they are shooting at
+function drawSoldier(m, p, u) {
+  const [x, y] = p, desert = R.T.def.id === 'tobruk';
+  const uni = desert ? '#a8956f' : '#5d6247', dark = desert ? '#7d6d50' : '#3d412f', helm = desert ? '#8f7f5c' : '#4a4f3c';
+  if (4.4 * u < 2.5) { if (m.alive) { g.fillStyle = dark; g.fillRect(x - 0.6, y - 3, 1.2, 3); } return; }
+  if (!m.alive) {
+    const a = clamp(1 - (m.dead - 2.5) / 1.5, 0, 1); if (a <= 0) return;
+    g.globalAlpha = a;
+    g.fillStyle = dark; g.fillRect(x - 2.2 * u, y - 0.6 * u, 1.8 * u, 0.6 * u);
+    g.fillStyle = uni; g.fillRect(x - 0.5 * u, y - 0.75 * u, 2.2 * u, 0.75 * u);
+    g.fillStyle = helm; g.beginPath(); g.arc(x + 2.2 * u, y - 0.45 * u, 0.48 * u, 0, TAU); g.fill();
+    g.globalAlpha = 1; return;
+  }
+  const side = Math.sin(m.face - camA) >= 0 ? 1 : -1, kneel = m.kind === 'mg', hip = kneel ? 1.2 : 2.2;
+  g.fillStyle = 'rgba(0,0,0,.3)'; g.beginPath(); g.ellipse(x, y, 1.5 * u, 0.45 * u, 0, 0, TAU); g.fill();
+  g.fillStyle = dark;
+  if (kneel) g.fillRect(x - 1.0 * u, y - 1.2 * u, 2.0 * u, 1.2 * u);
+  else { g.fillRect(x - 0.62 * u, y - hip * u, 0.5 * u, hip * u); g.fillRect(x + 0.12 * u, y - hip * u, 0.5 * u, hip * u); }
+  g.fillStyle = uni; g.fillRect(x - 0.78 * u, y - (hip + 1.75) * u, 1.56 * u, 1.8 * u);
+  g.fillStyle = dark; g.fillRect(x - 0.78 * u, y - (hip + 0.32) * u, 1.56 * u, 0.24 * u); g.fillRect(x - 0.2 * u, y - (hip + 1.75) * u, 0.4 * u, 1.45 * u);
+  g.fillStyle = '#c69872'; g.fillRect(x - 0.34 * u, y - (hip + 2.35) * u, 0.68 * u, 0.62 * u);
+  g.fillStyle = helm; g.beginPath(); g.ellipse(x, y - (hip + 2.35) * u, 0.66 * u, 0.46 * u, 0, Math.PI, TAU); g.fill();
+  g.fillRect(x - 0.78 * u, y - (hip + 2.4) * u, 1.56 * u, 0.16 * u);
+  const sh = y - (hip + 1.3) * u;
+  let mx, my;
+  if (m.kind === 'at') {
+    g.fillStyle = '#3c3f30'; g.fillRect(x - 1.6 * u, sh - 0.6 * u, 3.2 * u, 0.48 * u);
+    mx = x + side * 1.6 * u; my = sh - 0.36 * u;
+    if (m.flash > 0) { g.fillStyle = 'rgba(200,190,170,.7)'; g.beginPath(); g.arc(x - side * 2.2 * u, my, 1.2 * u, 0, TAU); g.fill(); }
+  } else {
+    const len = kneel ? 2.8 : 2.0;
+    g.strokeStyle = '#2a261e'; g.lineWidth = Math.max(1, (kneel ? 0.32 : 0.22) * u);
+    g.beginPath(); g.moveTo(x - side * 0.5 * u, sh); g.lineTo(x + side * len * u, sh - 0.12 * u); g.stroke();
+    mx = x + side * len * u; my = sh - 0.12 * u;
+  }
+  if (m.flash > 0) { g.fillStyle = '#ffe9a0'; g.beginPath(); g.arc(mx, my, Math.max(1, 0.55 * u), 0, TAU); g.fill(); }
+}
 
 function txt(t, x, y, size, color, align = 'left', font = 'Silkscreen') {
   sx.font = `${size}px ${font}, monospace`; sx.textAlign = align; sx.textBaseline = 'alphabetic';
@@ -1126,19 +1450,31 @@ function drawTags() {
     sx.fillStyle = t.hp > 50 ? '#8fbf5a' : t.hp > 25 ? '#f2c14e' : '#e0592a'; sx.fillRect(bx, y0 + 20, bw * t.hp / 100, 4);
   }
   sx.globalAlpha = 1;
+  if (lockMark) {
+    const x = lockMark.x * k, y = lockMark.y * k, r = lockMark.r * k, c = r * 0.4;
+    sx.strokeStyle = lockMark.ok ? '#f2c14e' : 'rgba(239,230,207,.6)'; sx.lineWidth = 2;
+    for (const [sxn, syn] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {
+      sx.beginPath(); sx.moveTo(x + sxn * r, y + syn * (r - c)); sx.lineTo(x + sxn * r, y + syn * r); sx.lineTo(x + sxn * (r - c), y + syn * r); sx.stroke();
+    }
+  }
 }
-const PORTRAIT_CAM = { x: -40, y: 0, h: 15, fx: 1, fy: 0, rx: 0, ry: 1, F: 185, cx: 109, hz: 402 };
+const PORTRAIT_CAM = { x: -40, y: 0, h: 15, fx: 1, fy: 0, rx: 0, ry: 1, F: 215, cx: 109, hz: 392 };
 function drawHUD() {
   sx.setTransform(scr.width / 960, 0, 0, scr.height / 600, 0, 0);
   drawTags();
   const p = R.player;
   if (!p) return;
+  if (p.hitT > 0) {
+    const a = p.hitT / 0.35 * 0.45, gr = sx.createRadialGradient(480, 300, 260, 480, 300, 560);
+    gr.addColorStop(0, 'rgba(200,40,30,0)'); gr.addColorStop(1, `rgba(200,40,30,${a})`);
+    sx.fillStyle = gr; sx.fillRect(0, 0, 960, 600);
+  }
   // portrait of your tank
   sx.fillStyle = 'rgba(21,20,14,.62)'; sx.fillRect(24, 400, 170, 92);
   sx.fillStyle = p.type.tag; sx.fillRect(24, 400, 170, 3);
   sx.fillStyle = 'rgba(0,0,0,.35)'; sx.beginPath(); sx.ellipse(109, 472, 66, 10, 0, 0, TAU); sx.fill();
   sx.save(); sx.beginPath(); sx.rect(24, 403, 170, 89); sx.clip();
-  drawModel(sx, PORTRAIT_CAM, p.model.faces, 0, 0, 2.5, p.dead > 0 ? { mul: 0.35 } : null);
+  drawModel(sx, PORTRAIT_CAM, p.model, 0, 0, 2.5, p.dead > 0 ? { mul: 0.35 } : null, { tur: p.tur, recoil: p.recoil });
   sx.restore();
   txt(p.type.nation.toUpperCase(), 186, 420, 9, '#a39a7c', 'right');
   const rank = rankings().indexOf(p);
@@ -1174,6 +1510,12 @@ function drawHUD() {
   // minimap
   const mx = 772, my = 412, ms = 170 / TS;
   sx.drawImage(R.T.mini, mx, my);
+  for (const b of R.objs.blocks) {
+    if (!b.men.some(m => m.alive) && b.walls.every(w => w.hp <= 0)) continue;
+    const w = b.walls[0], cx = mx + w.x * ms, cy = my + w.y * ms;
+    sx.strokeStyle = '#e0592a'; sx.lineWidth = 2.5;
+    sx.beginPath(); sx.moveTo(cx - 4, cy - 4); sx.lineTo(cx + 4, cy + 4); sx.moveTo(cx + 4, cy - 4); sx.lineTo(cx - 4, cy + 4); sx.stroke();
+  }
   for (const t of R.tanks) {
     sx.fillStyle = t.dead > 0 ? '#555' : t.type.tag;
     const r = t.isPlayer ? 5 : 4;
@@ -1229,14 +1571,14 @@ function syncMenu() {
   try { localStorage.setItem('wt-cfg', JSON.stringify(cfg)); } catch (e) { /* storage unavailable */ }
 }
 function drawPreviews(now) {
-  const cam = { x: -40, y: 0, h: 15, fx: 1, fy: 0, rx: 0, ry: 1, F: 270, cx: 180, hz: 50 };
+  const cam = { x: -40, y: 0, h: 15, fx: 1, fy: 0, rx: 0, ry: 1, F: 330, cx: 180, hz: 40 };
   for (const { t, c } of previews) {
     const ctx = c.getContext('2d');
     const gr = ctx.createLinearGradient(0, 0, 0, 210); gr.addColorStop(0, '#2e2b21'); gr.addColorStop(1, '#15140e');
     ctx.fillStyle = gr; ctx.fillRect(0, 0, 360, 210);
     ctx.fillStyle = 'rgba(0,0,0,.4)'; ctx.beginPath(); ctx.ellipse(180, 152, 120, 20, 0, 0, TAU); ctx.fill();
     const spin = cfg.tank === t.id ? now / 1400 : 2.4;
-    drawModel(ctx, cam, MODELS[t.id].faces, 0, 0, spin, null);
+    drawModel(ctx, cam, MODELS[t.id], 0, 0, spin, null, { tur: cfg.tank === t.id ? Math.sin(now / 1100) * 0.6 : 0 });
   }
 }
 
@@ -1266,6 +1608,7 @@ function showResults() {
     if (!rec || p.finishTime < rec) { note += ' New personal record.'; try { localStorage.setItem(key, String(p.finishTime)); } catch (e) { /* storage unavailable */ } }
     else note += ` Your record here: ${fmt(rec)}.`;
   }
+  note += ` Roadblocks destroyed: ${p.walls}. Infantry knocked out: ${p.men}.`;
   $('resNote').textContent = note;
   const rows = rk.map((t, i) => {
     const time = t.finished ? fmt(t.finishTime) : 'still racing';
