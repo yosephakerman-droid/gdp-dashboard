@@ -73,7 +73,7 @@ tr.you td{color:var(--khaki)}
 </head>
 <body>
 <div class="stage" id="stage">
-  <canvas id="screen" width="960" height="600" aria-label="Race view"></canvas>
+  <canvas id="screen" width="1280" height="800" aria-label="Race view"></canvas>
 
   <section class="overlay" id="menu" aria-label="Race setup">
     <header class="brand">
@@ -126,7 +126,7 @@ tr.you td{color:var(--khaki)}
 'use strict';
 
 // ---------------------------------------------------------------- constants
-const W = 480, H = 300, HZ = 104, F = 240, CAM_H = 22, CAM_BACK = 42;
+const W = 640, H = 400, HZ = 139, F = 320, CAM_H = 22, CAM_BACK = 42;
 const TS = 1600, RW = 48, KMH = 0.41;
 const TAU = Math.PI * 2;
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
@@ -146,105 +146,220 @@ sx.imageSmoothingEnabled = false;
 // ---------------------------------------------------------------- tanks
 const TANKS = [
   { id: 'tiger', name: 'Tiger I', nation: 'Germany', max: 118, acc: 52, turn: 1.75, taken: 0.55, dmg: 45, reload: 2.2, mass: 1.7,
-    color: [188, 165, 108], dark: [62, 57, 46], tag: '#f2c14e', gun: '88 mm',
+    color: [198, 174, 114], dark: [62, 57, 46], tag: '#f2c14e', gun: '88 mm',
     blurb: '100 mm of frontal armour and the 88. Slow off the line, very hard to stop.' },
   { id: 'sherman', name: 'M4 Sherman', nation: 'USA', max: 136, acc: 74, turn: 2.1, taken: 0.8, dmg: 30, reload: 1.3, mass: 1.1,
-    color: [104, 110, 64], dark: [52, 52, 40], tag: '#e8e6dc', gun: '75 mm',
+    color: [92, 98, 58], dark: [50, 50, 40], tag: '#e8e6dc', gun: '75 mm',
     blurb: 'Reliable all-rounder with a quick-loading 75 mm gun.' },
   { id: 'cromwell', name: 'Cromwell', nation: 'Britain', max: 156, acc: 80, turn: 2.15, taken: 1.0, dmg: 25, reload: 1.15, mass: 1.0,
-    color: [88, 98, 64], dark: [46, 48, 38], tag: '#5aa0e6', gun: '75 mm',
+    color: [124, 116, 82], dark: [52, 50, 40], tag: '#5aa0e6', gun: '75 mm',
     blurb: 'Fastest tank on the grid. Thin armour, so keep it moving.' },
   { id: 't34', name: 'T-34/85', nation: 'USSR', max: 145, acc: 84, turn: 2.3, taken: 0.75, dmg: 34, reload: 1.6, mass: 1.15,
-    color: [72, 92, 52], dark: [44, 46, 36], tag: '#e5483b', gun: '85 mm',
+    color: [76, 98, 52], dark: [44, 46, 36], tag: '#e5483b', gun: '85 mm',
     blurb: 'Sloped armour and wide tracks. Corners better than anything else here.' },
 ];
 
 // ---------------------------------------------------------------- 3D models
-function prism(prof, y0, y1, c, xo = 0) {
-  const faces = [];
-  let cx = 0, cz = 0; prof.forEach(p => { cx += p[0]; cz += p[1]; }); cx /= prof.length; cz /= prof.length;
-  faces.push({ v: prof.map(([x, z]) => [x + xo, y0, z]), n: [0, -1, 0], c });
-  faces.push({ v: prof.map(([x, z]) => [x + xo, y1, z]), n: [0, 1, 0], c });
-  for (let i = 0; i < prof.length; i++) {
-    const p = prof[i], q = prof[(i + 1) % prof.length];
-    const dx = q[0] - p[0], dz = q[1] - p[1];
-    let nx = dz, nz = -dx;
-    const mx = (p[0] + q[0]) / 2, mz = (p[1] + q[1]) / 2;
-    if ((mx - cx) * nx + (mz - cz) * nz < 0) { nx = -nx; nz = -nz; }
-    const l = Math.hypot(nx, nz) || 1;
-    faces.push({ v: [[p[0] + xo, y0, p[1]], [q[0] + xo, y0, q[1]], [q[0] + xo, y1, q[1]], [p[0] + xo, y1, p[1]]], n: [nx / l, 0, nz / l], c });
+// Local axes: x forward, y right, z up. Roughly 2.5 units to the metre.
+function newell(vs) {
+  let nx = 0, ny = 0, nz = 0;
+  for (let i = 0; i < vs.length; i++) {
+    const a = vs[i], b = vs[(i + 1) % vs.length];
+    nx += (a[1] - b[1]) * (a[2] + b[2]); ny += (a[2] - b[2]) * (a[0] + b[0]); nz += (a[0] - b[0]) * (a[1] + b[1]);
   }
-  return faces;
+  const l = Math.hypot(nx, ny, nz);
+  return l < 1e-6 ? null : [nx / l, ny / l, nz / l];
 }
-// flat polygon stuck on a side plane (y = ±y); drawn just after the face it sits on
-function decal(poly, y, c, bias = 0.4) {
-  return [-1, 1].map(s => ({ v: poly.map(([x, z]) => [x, y * s, z]), n: [0, s, 0], c, bias }));
+// closed convex shape from polygons; normals are turned to face away from its centre
+function solid(polys, c) {
+  let cx = 0, cy = 0, cz = 0, k = 0;
+  polys.forEach(p => p.forEach(v => { cx += v[0]; cy += v[1]; cz += v[2]; k++; }));
+  cx /= k; cy /= k; cz /= k;
+  const out = [];
+  for (const v of polys) {
+    let n = newell(v); if (!n) continue;
+    let fx = 0, fy = 0, fz = 0; v.forEach(p => { fx += p[0]; fy += p[1]; fz += p[2]; });
+    fx /= v.length; fy /= v.length; fz /= v.length;
+    if (n[0] * (fx - cx) + n[1] * (fy - cy) + n[2] * (fz - cz) < 0) n = n.map(q => -q);
+    out.push({ v, n, c });
+  }
+  return out;
 }
+function extrude(poly, map, a0, a1, c) {
+  const A = poly.map(([u, v]) => map(u, v, a0)), B = poly.map(([u, v]) => map(u, v, a1));
+  const polys = [A, B];
+  for (let i = 0; i < poly.length; i++) { const j = (i + 1) % poly.length; polys.push([A[i], A[j], B[j], B[i]]); }
+  return solid(polys, c);
+}
+const prism = (prof, y0, y1, c, xo = 0) => extrude(prof, (x, z, y) => [x + xo, y, z], y0, y1, c);  // side profile (x,z) across the width
+const slab = (top, z0, z1, c, xo = 0) => extrude(top, (x, y, z) => [x + xo, y, z], z0, z1, c);     // top-view outline (x,y) raised
+const tube = (sec, x0, x1, c) => extrude(sec, (y, z, x) => [x, y, z], x0, x1, c);                 // cross-section (y,z) lengthwise
+const box = (x0, x1, y0, y1, z0, z1, c) => slab([[x0, y0], [x1, y0], [x1, y1], [x0, y1]], z0, z1, c);
+function loft(secs, c, xo = 0) {
+  const S = secs.map(([x, p]) => p.map(([y, z]) => [x + xo, y, z]));
+  const polys = [S[0], S[S.length - 1]];
+  for (let k = 0; k + 1 < S.length; k++) for (let i = 0; i < S[k].length; i++) {
+    const j = (i + 1) % S[k].length; polys.push([S[k][i], S[k][j], S[k + 1][j], S[k + 1][i]]);
+  }
+  return solid(polys, c);
+}
+const sym = half => [...half, ...half.slice().reverse().map(([y, z]) => [-y, z])];
+
+// markings: flat polygons drawn just after the surface they sit on
+function decal(poly, y, c, bias = 0.4) { return [-1, 1].map(s => ({ v: poly.map(([x, z]) => [x, y * s, z]), n: [0, s, 0], c, bias })); }
+const top = (poly, z, c, bias = 0.4) => ({ v: poly.map(([x, y]) => [x, y, z]), n: [0, 0, 1], c, bias });
+const front = (poly, x, c, bias = 0.4) => ({ v: poly.map(([y, z]) => [x, y, z]), n: [1, 0, 0], c, bias });
+const flag = (poly, y, c, bias) => [1, -1].map(s => ({ v: poly.map(([x, z]) => [x, y, z]), n: [0, s, 0], c, bias, edge: false }));
 const star = (cx, cz, r) => Array.from({ length: 10 }, (_, i) => { const a = -Math.PI / 2 + i * Math.PI / 5, rr = i % 2 ? r * 0.42 : r; return [cx + Math.cos(a) * rr, cz - Math.sin(a) * rr]; });
-const octa = (cx, cz, r) => Array.from({ length: 8 }, (_, i) => { const a = i * Math.PI / 4 + Math.PI / 8; return [cx + Math.cos(a) * r, cz + Math.sin(a) * r]; });
+const circ = (cx, cz, r, n = 10) => Array.from({ length: n }, (_, i) => [cx + Math.cos(i / n * TAU) * r, cz + Math.sin(i / n * TAU) * r]);
 const crossP = (cx, cz, r, t) => [[cx - t, cz + r], [cx + t, cz + r], [cx + t, cz + t], [cx + r, cz + t], [cx + r, cz - t], [cx + t, cz - t], [cx + t, cz - r], [cx - t, cz - r], [cx - t, cz - t], [cx - r, cz - t], [cx - r, cz + t], [cx - t, cz + t]];
 const rect = (x0, z0, x1, z1) => [[x0, z0], [x1, z0], [x1, z1], [x0, z1]];
 const trackProf = (x0, x1, h) => [[x0 + 1, 0.3], [x1 - 1, 0.3], [x1 + 0.6, 1.8], [x1 - 0.4, h], [x0, h], [x0 - 0.6, 1.6]];
-function wheels(n, x0, x1, z, r, y, c) { const out = []; for (let i = 0; i < n; i++) out.push(...decal(octa(x0 + (x1 - x0) * i / (n - 1), z, r), y, c, 0.3)); return out; }
+function roadWheels(xs, z, r, y, tire, disc, hub) {
+  const f = [];
+  for (const x of xs) f.push(...decal(circ(x, z, r), y, tire, 0.3), ...decal(circ(x, z, r * 0.74), y, disc, 0.36), ...decal(circ(x, z, r * 0.24, 6), y, hub, 0.42));
+  return f;
+}
+const WHITE = [238, 236, 226], BLACK = [26, 26, 24];
+// radio mast with a pennant in national colours, trailing behind the pole
+function mast(x, y, z0, nation) {
+  const zt = z0 + 9.5, f = box(x - 0.13, x + 0.13, y - 0.13, y + 0.13, z0, zt, [36, 36, 32]);
+  const L = x - 3.4, B = zt - 2.1, R = (x0, z0_, x1, z1) => rect(x0, z0_, x1, z1);
+  const lay = (poly, c, b) => f.push(...flag(poly, y, c, b));
+  if (nation === 'Germany') {
+    lay(R(L, B, x, zt), [214, 210, 196], 0.3);
+    lay(crossP((L + x) / 2, (B + zt) / 2, 0.85, 0.3), WHITE, 0.35);
+    lay(crossP((L + x) / 2, (B + zt) / 2, 0.7, 0.16), BLACK, 0.4);
+  } else if (nation === 'USA') {
+    lay(R(L, B, x, zt), WHITE, 0.3);
+    for (let i = 0; i < 4; i++) { const z = B + i * 0.6; lay(R(L, z, x, z + 0.3), [190, 40, 46], 0.35); }
+    lay(R(x - 1.5, zt - 1.05, x, zt), [40, 52, 120], 0.4);
+  } else if (nation === 'Britain') {
+    const zc = (B + zt) / 2, xc = (L + x) / 2;
+    lay(R(L, B, x, zt), [36, 52, 128], 0.3);
+    lay([[L, B], [L + 0.4, B], [x, zt - 0.3], [x, zt], [x - 0.4, zt], [L, B + 0.3]], WHITE, 0.33);
+    lay([[L, zt], [L, zt - 0.3], [x - 0.4, B], [x, B], [x, B + 0.3], [L + 0.4, zt]], WHITE, 0.33);
+    lay(R(L, zc - 0.38, x, zc + 0.38), WHITE, 0.36); lay(R(xc - 0.38, B, xc + 0.38, zt), WHITE, 0.36);
+    lay(R(L, zc - 0.2, x, zc + 0.2), [200, 36, 44], 0.4); lay(R(xc - 0.2, B, xc + 0.2, zt), [200, 36, 44], 0.4);
+  } else {
+    lay(R(L, B, x, zt), [200, 32, 36], 0.3);
+    lay(star(x - 0.8, zt - 0.6, 0.42), [240, 200, 60], 0.4);
+  }
+  return f;
+}
 
 function buildModel(id) {
   const T = TANKS.find(t => t.id === id), C = T.color, D = T.dark;
-  const L = [Math.min(255, C[0] + 22), Math.min(255, C[1] + 22), Math.min(255, C[2] + 18)];
-  const WH = [D[0] + 26, D[1] + 24, D[2] + 20];
-  let f = [], tip, tipZ;
+  const f = [], add = a => f.push(...a);
+  let tip, tipZ;
   if (id === 'tiger') {
-    const xo = -0.6;
-    f.push(...prism(trackProf(-8.2, 8.0, 4.0), -4.7, -2.9, D), ...prism(trackProf(-8.2, 8.0, 4.0), 2.9, 4.7, D));
-    f.push(...wheels(8, -6.6, 6.2, 1.8, 1.35, 4.75, WH));
-    f.push(...prism([[-8.3, 2.0], [7.6, 2.0], [8.3, 3.8], [8.0, 6.2], [-8.3, 6.2]], -4.8, 4.8, C));
-    f.push(...decal(crossP(-5, 4.1, 1.5, 0.5), 4.85, [235, 232, 220], 0.5), ...decal(crossP(-5, 4.1, 1.2, 0.28), 4.85, [24, 24, 24], 0.6));
-    f.push(...prism([[-4.2, 6.2], [3.6, 6.2], [3.6, 9.4], [-3.6, 9.4], [-4.2, 8.8]], -3.5, 3.5, C, xo));
-    f.push(...decal(rect(-2.2 + xo, 7.3, 0.6 + xo, 8.5), 3.55, [150, 40, 30], 0.4));
-    f.push(...prism(rect(3.0, 6.8, 4.8, 9.0), -1.7, 1.7, L, xo));
-    f.push(...prism(rect(4.8, 7.6, 16, 8.4), -0.42, 0.42, C, xo));
-    f.push(...prism(rect(15.6, 7.3, 17.2, 8.7), -0.7, 0.7, D, xo));
-    f.push(...prism(rect(-3.4, 9.4, -1.4, 10.4), 0.6, 2.4, C, xo));
-    tip = 16.6; tipZ = 8.0;
+    // boxy hull overhanging the tracks, horseshoe turret, long 88 with muzzle brake, interleaved wheels, dunkelgelb with camouflage
+    const CA = [104, 112, 64], CB = [134, 84, 52], LT = [212, 188, 128], xo = -0.4;
+    add(prism(trackProf(-8.0, 8.0, 4.0), -4.6, -2.9, D)); add(prism(trackProf(-8.0, 8.0, 4.0), 2.9, 4.6, D));
+    for (let i = 0; i < 8; i++) { const x = -6.3 + i * 1.75; add(decal(circ(x, 1.95, 1.45), 4.65, i % 2 ? [156, 138, 94] : [182, 160, 106], 0.3 + (i % 2) * 0.03)); add(decal(circ(x, 1.95, 0.35, 6), 4.65, [72, 66, 50], 0.45)); }
+    add(box(-7.6, 7.2, -2.9, 2.9, 1.2, 4.0, C));
+    add(prism([[5.8, 1.2], [7.2, 1.2], [8.1, 2.6], [7.4, 4.0], [5.8, 4.0]], -2.9, 2.9, C));
+    add(box(-7.9, 7.0, -4.6, 4.6, 4.0, 6.2, C));
+    f.push(front(rect(-2.9, 5.0, -1.1, 5.6), 7.0, [40, 38, 32]), front(circ(2.0, 5.2, 0.38, 6), 7.0, [40, 38, 32]));
+    for (const s of [-1, 1]) f.push(top([[-7.5, 1.0 * s], [-5.0, 1.0 * s], [-5.0, 3.6 * s], [-7.5, 3.6 * s]], 6.2, [150, 132, 88], 0.3));
+    add(box(-8.4, -7.9, -2.0, -1.4, 4.4, 6.9, [92, 58, 40])); add(box(-8.4, -7.9, 1.4, 2.0, 4.4, 6.9, [92, 58, 40]));
+    add(decal([[-7.2, 4.3], [-4.8, 5.8], [-3.0, 4.9], [-4.6, 4.1]], 4.62, CA, 0.3));
+    add(decal([[2.0, 4.1], [3.8, 5.9], [6.0, 5.2], [4.6, 4.1]], 4.62, CB, 0.3));
+    add(decal(crossP(-1.4, 5.1, 0.95, 0.34), 4.62, WHITE, 0.36)); add(decal(crossP(-1.4, 5.1, 0.8, 0.18), 4.62, BLACK, 0.42));
+    f.push(top([[-6.5, -2.4], [-3.0, -3.8], [-1.0, -2.0], [-4.0, -1.0]], 6.2, CA, 0.32), top([[0.5, 1.5], [3.5, 3.8], [5.5, 2.0], [2.5, 0.8]], 6.2, CB, 0.32));
+    add(slab([[3.0, -3.3], [3.0, 3.3], [0.6, 3.6], [-2.4, 3.3], [-3.7, 2.2], [-4.1, 0], [-3.7, -2.2], [-2.4, -3.3], [0.6, -3.6]], 6.2, 9.0, C, xo));
+    add(box(-5.6, -4.3, -2.4, 2.4, 6.6, 8.4, C));
+    add(decal([[-3.2, 6.6], [-1.2, 8.4], [1.0, 7.6], [-0.8, 6.6]], 3.64, CB, 0.3));
+    f.push(top([[-3.2, -1.2], [-1.2, -2.8], [1.5, -1.6], [0, 0.4]], 9.0, CA, 0.32), top([[-2.2, 1.0], [0.8, 2.6], [2.4, 1.2], [0.4, 0.2]], 9.0, CB, 0.32));
+    add(box(2.6, 3.9, -1.9, 1.9, 6.6, 8.8, LT));
+    add(tube(circ(0, 7.7, 0.42, 8), 3.9, 15.0, C)); add(tube(circ(0, 7.7, 0.78, 8), 15.0, 16.4, D));
+    add(slab(circ(-2.4, -1.9, 1.0, 8), 9.0, 10.0, C));
+    add(mast(-6.9, -3.8, 6.2, 'Germany'));
+    tip = 16.4; tipZ = 7.7;
   } else if (id === 'sherman') {
-    const xo = 0.4;
-    f.push(...prism(trackProf(-7.3, 6.8, 3.4), -4.1, -2.7, D), ...prism(trackProf(-7.3, 6.8, 3.4), 2.7, 4.1, D));
-    f.push(...wheels(6, -5.4, 4.8, 1.4, 0.95, 4.15, WH));
-    f.push(...prism([[-7.2, 1.6], [5.6, 1.6], [7.0, 3.2], [4.2, 6.0], [-7.2, 6.0]], -3.9, 3.9, C));
-    f.push(...decal(star(-2.6, 4.0, 1.5), 3.95, [236, 234, 222]));
-    f.push(...prism([[-3.6, 6], [2.6, 6], [3.3, 7.4], [2.6, 9.0], [-2.4, 9.0], [-3.8, 7.6]], -2.9, 2.9, C, xo));
-    f.push(...decal(star(-0.6 + xo, 7.5, 1.0), 2.95, [236, 234, 222]));
-    f.push(...prism(rect(3.0, 6.9, 3.9, 8.4), -1.5, 1.5, L, xo));
-    f.push(...prism(rect(3.9, 7.4, 12, 8.0), -0.36, 0.36, C, xo));
-    f.push(...prism(rect(-2.4, 9, -0.6, 9.9), 0.5, 2.2, C, xo));
-    tip = 12.4; tipZ = 7.7;
+    // tall rounded cast hull, sloped glacis, rounded turret, short 75, VVSS bogies, olive drab with white stars
+    const W = WHITE, xo = 0.6;
+    add(prism(trackProf(-7.4, 7.0, 3.3), -4.2, -2.7, D)); add(prism(trackProf(-7.4, 7.0, 3.3), 2.7, 4.2, D));
+    for (const bx of [-4.6, -0.6, 3.4]) {
+      add(decal([[bx - 1.4, 1.0], [bx + 1.4, 1.0], [bx + 0.6, 2.7], [bx - 0.6, 2.7]], 4.22, [74, 78, 48], 0.3));
+      for (const dx of [-0.95, 0.95]) { add(decal(circ(bx + dx, 1.15, 0.85), 4.22, [58, 58, 46], 0.36)); add(decal(circ(bx + dx, 1.15, 0.28, 6), 4.22, [96, 100, 62], 0.42)); }
+      add(decal(circ(bx + 0.5, 2.95, 0.36, 6), 4.22, [58, 58, 46], 0.36));
+    }
+    add(decal(circ(6.4, 2.3, 1.0), 4.22, [62, 62, 48], 0.33)); add(decal(circ(-6.9, 1.8, 0.9), 4.22, [62, 62, 48], 0.33));
+    add(loft([
+      [-7.1, sym([[3.0, 1.5], [3.9, 3.6], [3.4, 5.9]])],
+      [3.2, sym([[3.0, 1.5], [3.9, 3.6], [3.4, 5.9]])],
+      [6.4, sym([[3.0, 1.5], [3.8, 2.8], [3.2, 3.6]])],
+      [7.4, sym([[2.6, 1.8], [3.0, 2.4], [2.4, 2.9]])],
+    ], C));
+    add(box(3.4, 4.8, -2.6, -0.9, 5.0, 6.3, C)); add(box(3.4, 4.8, 0.9, 2.6, 5.0, 6.3, C));
+    f.push(top(circ(-5.0, 0, 2.1, 16), 5.9, W, 0.3), top(circ(-5.0, 0, 1.75, 16), 5.9, C, 0.35), top(star(-5.0, 0, 1.7), 5.9, W, 0.4));
+    add(decal(star(-3.6, 3.6, 1.2), 3.95, W));
+    add(loft([
+      [-3.8, sym([[1.9, 6.0], [2.2, 7.4], [1.2, 8.6]])],
+      [-2.6, sym([[2.8, 6.0], [3.0, 7.5], [2.0, 8.9]])],
+      [1.4, sym([[2.9, 6.0], [3.0, 7.5], [2.0, 8.9]])],
+      [2.8, sym([[2.2, 6.1], [2.3, 7.4], [1.4, 8.4]])],
+    ], C, xo));
+    add(decal(star(0, 7.45, 0.85), 3.05, W));
+    add(box(3.3, 4.1, -1.5, 1.5, 6.7, 8.2, [102, 108, 66]));
+    add(tube(circ(0, 7.45, 0.34, 8), 4.1, 11.4, C)); add(tube(circ(0, 7.45, 0.44, 8), 11.2, 11.9, C));
+    add(slab(circ(-1.0, 1.3, 0.95, 8), 8.8, 9.6, C));
+    add(box(-1.4, 1.6, 1.22, 1.38, 9.6, 9.8, [36, 36, 32]));
+    add(mast(-6.4, -2.8, 5.9, 'USA'));
+    tip = 11.9; tipZ = 7.45;
   } else if (id === 'cromwell') {
-    const xo = 0.3;
-    f.push(...prism(trackProf(-7.9, 7.6, 4.2), -4.1, -2.6, D), ...prism(trackProf(-7.9, 7.6, 4.2), 2.6, 4.1, D));
-    f.push(...wheels(5, -6, 6, 2.0, 1.5, 4.15, WH));
-    f.push(...prism([[-7.9, 2.2], [7.5, 2.2], [7.9, 4.0], [7.6, 5.2], [-7.9, 5.2]], -3.6, 3.6, C));
-    f.push(...decal(rect(-6.2, 3.2, -4.2, 4.8), 3.65, [230, 228, 214], 0.4), ...decal(rect(-5.8, 3.55, -4.6, 4.45), 3.65, [178, 42, 36], 0.5));
-    f.push(...prism([[-3.4, 5.2], [3.0, 5.2], [3.4, 6.3], [3.2, 8.0], [-3.4, 8.0]], -3.2, 3.2, C, xo));
-    f.push(...decal(rect(-1.6 + xo, 6.2, 0.4 + xo, 7.4), 3.25, [90, 150, 220], 0.4));
-    f.push(...prism(rect(3.2, 5.8, 4.0, 7.6), -1.6, 1.6, L, xo));
-    f.push(...prism(rect(4.0, 6.4, 12.4, 7.0), -0.34, 0.34, C, xo));
-    f.push(...prism(rect(-2.6, 8.0, -0.8, 8.8), 0.4, 2.0, C, xo));
-    tip = 12.7; tipZ = 6.7;
+    // square slab-sided hull with panniers over the tracks, box turret with rear bin, five big Christie wheels, roundels
+    const xo = 0.8, BL = [40, 70, 150], RD = [190, 40, 36];
+    add(prism(trackProf(-7.8, 7.4, 4.0), -4.3, -2.8, D)); add(prism(trackProf(-7.8, 7.4, 4.0), 2.8, 4.3, D));
+    add(roadWheels([-5.8, -2.9, 0, 2.9, 5.8], 2.0, 1.6, 4.32, [44, 44, 38], [104, 100, 72], [60, 58, 46]));
+    add(box(-7.6, 6.8, -2.8, 2.8, 1.4, 4.0, C));
+    add(prism([[6.0, 1.4], [7.4, 1.8], [7.6, 4.0], [6.0, 4.0]], -2.8, 2.8, C));
+    add(box(-7.8, 6.4, -4.4, 4.4, 4.0, 5.3, C));
+    add(box(6.4, 7.9, -4.4, -2.8, 3.9, 4.15, C)); add(box(6.4, 7.9, 2.8, 4.4, 3.9, 4.15, C));
+    add(box(6.4, 7.3, -3.4, 0.6, 4.0, 5.7, C));
+    f.push(front(rect(-2.6, 4.8, -0.8, 5.3), 7.3, [40, 38, 32]));
+    for (let i = 0; i < 5; i++) f.push(top(rect(-7.4 + i * 0.5, -3.4, -7.2 + i * 0.5, 3.4), 5.3, [80, 76, 56], 0.3));
+    f.push(top(circ(-4.4, 0, 1.9, 16), 5.3, BL, 0.3), top(circ(-4.4, 0, 1.3, 16), 5.3, WHITE, 0.35), top(circ(-4.4, 0, 0.65, 12), 5.3, RD, 0.4));
+    add(slab([[3.0, -2.9], [3.0, 2.9], [-2.2, 3.3], [-3.4, 2.6], [-3.4, -2.6], [-2.2, -3.3]], 5.3, 7.9, C, xo));
+    add(box(-4.6, -2.6, -2.4, 2.4, 5.7, 7.3, C));
+    add(decal(circ(-0.6, 6.6, 0.95, 12), 3.36, BL, 0.3)); add(decal(circ(-0.6, 6.6, 0.62, 12), 3.36, WHITE, 0.35)); add(decal(circ(-0.6, 6.6, 0.3, 8), 3.36, RD, 0.4));
+    add(box(3.8, 4.5, -1.4, 1.4, 5.8, 7.5, [130, 124, 90]));
+    add(tube(circ(0, 6.65, 0.33, 8), 4.5, 12.0, C));
+    add(box(-1.6, 0, -2.0, -0.4, 7.9, 8.6, C));
+    add(mast(-6.8, -3.6, 5.3, 'Britain'));
+    tip = 12.0; tipZ = 6.65;
   } else {
-    const xo = 0.9;
-    f.push(...prism(trackProf(-7.2, 7.0, 3.6), -4.3, -2.9, D), ...prism(trackProf(-7.2, 7.0, 3.6), 2.9, 4.3, D));
-    f.push(...wheels(5, -5.6, 5.6, 1.9, 1.5, 4.35, WH));
-    f.push(...prism([[-6.9, 1.8], [5.4, 1.8], [7.4, 3.3], [4.8, 5.3], [-6.2, 5.3], [-7.3, 3.4]], -3.8, 3.8, C));
-    f.push(...prism([[-3.2, 5.3], [2.6, 5.3], [3.6, 6.8], [2.6, 8.2], [-2.8, 8.2], [-3.8, 6.6]], -3.1, 3.1, C, xo));
-    f.push(...decal(star(-0.2 + xo, 6.8, 1.1), 3.15, [214, 52, 40]));
-    f.push(...prism(rect(3.2, 6.3, 4.2, 7.7), -1.3, 1.3, L, xo));
-    f.push(...prism(rect(4.2, 6.8, 13.8, 7.4), -0.36, 0.36, C, xo));
-    f.push(...prism(rect(-2.2, 8.2, -0.4, 9.0), 0.4, 2.0, C, xo));
-    tip = 14.7; tipZ = 7.1;
+    // sloped armour on every face, wide tracks, big rubber-tyred wheels, cast T-34/85 turret, long 85, red star
+    const xo = 0.4, RS = [208, 40, 32];
+    add(prism(trackProf(-7.3, 7.1, 3.6), -4.4, -2.9, D)); add(prism(trackProf(-7.3, 7.1, 3.6), 2.9, 4.4, D));
+    add(roadWheels([-5.6, -2.8, 0, 2.8, 5.6], 1.85, 1.55, 4.45, [40, 40, 36], [88, 108, 62], [50, 56, 40]));
+    add(loft([
+      [-7.2, sym([[2.9, 1.6], [3.5, 2.8], [3.0, 4.4]])],
+      [-6.2, sym([[2.9, 1.6], [4.4, 3.4], [3.3, 5.3]])],
+      [4.4, sym([[2.9, 1.6], [4.4, 3.4], [3.3, 5.3]])],
+      [7.5, sym([[2.9, 1.6], [3.6, 2.6], [3.0, 2.9]])],
+    ], C));
+    add(tube(circ(3.95, 4.25, 0.62, 8), -5.8, -3.2, [62, 82, 46])); add(tube(circ(-3.95, 4.25, 0.62, 8), -5.8, -3.2, [62, 82, 46]));
+    add(box(-7.6, -7.0, -1.7, -1.0, 2.8, 3.5, [74, 62, 46])); add(box(-7.6, -7.0, 1.0, 1.7, 2.8, 3.5, [74, 62, 46]));
+    add(loft([
+      [-3.6, sym([[2.0, 5.3], [2.4, 6.5], [1.6, 7.8]])],
+      [-2.4, sym([[3.0, 5.3], [3.2, 6.7], [2.3, 8.1]])],
+      [1.8, sym([[3.0, 5.3], [3.2, 6.7], [2.3, 8.1]])],
+      [3.2, sym([[2.0, 5.4], [2.2, 6.5], [1.4, 7.5]])],
+    ], C, xo));
+    add(decal(star(-0.1, 6.7, 1.05), 3.26, WHITE, 0.36)); add(decal(star(-0.1, 6.7, 0.8), 3.26, RS, 0.42));
+    f.push(top(rect(-2.4, -0.38, 2.0, 0.38), 8.1, WHITE, 0.35), top(rect(-0.6, -2.2, 0.16, 2.2), 8.1, WHITE, 0.36));
+    add(box(3.5, 4.4, -1.2, 1.2, 6.0, 7.4, [86, 108, 60]));
+    add(tube(circ(0, 6.75, 0.36, 8), 4.4, 14.2, C)); add(tube(circ(0, 6.75, 0.46, 8), 14.0, 14.7, C));
+    add(slab(circ(-1.0, -1.3, 0.9, 8), 8.0, 8.7, C));
+    add(mast(-5.6, -3.2, 5.3, 'USSR'));
+    tip = 14.7; tipZ = 6.75;
   }
   return { faces: f, tip, tipZ };
 }
 const MODELS = {}; TANKS.forEach(t => { MODELS[t.id] = buildModel(t.id); });
-const CRATE = [...prism(rect(-3, 0, 3, 6), -3, 3, [150, 112, 62]), ...decal(rect(-1.8, 1.2, 1.8, 4.8), 3.05, [222, 190, 70], 0.4), ...decal(crossP(0, 3, 1.4, 0.45), 3.05, [40, 34, 24], 0.5)];
+const CRATE = [...prism(rect(-3, 0, 3, 6), -3, 3, [150, 112, 62]), ...decal(rect(-1.8, 1.2, 1.8, 4.8), 3.0, [222, 190, 70], 0.4), ...decal(crossP(0, 3, 1.4, 0.45), 3.0, [40, 34, 24], 0.5), top(rect(-2.4, -2.4, 2.4, 2.4), 6, [176, 134, 76], 0.3)];
 
 // ---------------------------------------------------------------- projection
 const LIGHT = (() => { const l = [0.35, -0.45, 0.82], m = Math.hypot(...l); return l.map(v => v / m); })();
@@ -271,17 +386,18 @@ function drawModel(ctx, cam, faces, x, y, a, tint) {
     if (!ok) continue;
     const k = fc.v.length; mx /= k; my /= k; mz /= k;
     if (nx * (mx - cam.x) + ny * (my - cam.y) + nz * (mz - cam.h) >= 0) continue;
-    let b = 0.6 + 0.45 * Math.max(0, nx * LIGHT[0] + ny * LIGHT[1] + nz * LIGHT[2]);
+    let b = 0.58 + 0.5 * Math.max(0, nx * LIGHT[0] + ny * LIGHT[1] + nz * LIGHT[2]);
     let r = fc.c[0] * b, gg = fc.c[1] * b, bb = fc.c[2] * b;
     if (tint) {
       if (tint.mul) { r *= tint.mul; gg *= tint.mul; bb *= tint.mul; }
       if (tint.flash) { const f = tint.flash; r += (255 - r) * f; gg += (240 - gg) * f; bb += (200 - bb) * f; }
     }
-    list.push({ pts, d: dsum / k - (fc.bias || 0), col: `rgb(${r | 0},${gg | 0},${bb | 0})` });
+    const e = fc.bias || fc.edge === false ? 1 : 0.68;
+    list.push({ pts, d: dsum / k - (fc.bias || 0), col: `rgb(${r | 0},${gg | 0},${bb | 0})`, edge: `rgb(${r * e | 0},${gg * e | 0},${bb * e | 0})` });
   }
   list.sort((p, q) => q.d - p.d);
   for (const f of list) {
-    ctx.fillStyle = f.col; ctx.strokeStyle = f.col; ctx.lineWidth = 0.6;
+    ctx.fillStyle = f.col; ctx.strokeStyle = f.edge; ctx.lineWidth = 0.7;
     ctx.beginPath(); ctx.moveTo(f.pts[0][0], f.pts[0][1]);
     for (let i = 1; i < f.pts.length; i++) ctx.lineTo(f.pts[i][0], f.pts[i][1]);
     ctx.closePath(); ctx.fill(); ctx.stroke();
@@ -380,10 +496,13 @@ function buildTrack(def) {
   const id = c.getImageData(0, 0, TS, TS);
   const tex = new Uint32Array(TS * TS);
   const d8 = id.data;
+  const GN = 41, grid = Float32Array.from({ length: GN * GN }, () => rng() - 0.5);
   for (let y = 0; y < TS; y++) for (let x = 0; x < TS; x++) {
     const i = y * TS + x;
     let h = ((x >> 1) * 73856093 ^ (y >> 1) * 19349663) >>> 0; h = (h ^ (h >>> 13)) * 1274126177 >>> 0;
-    const nz = ((h & 255) / 255 - 0.5) * 18;
+    const gx = x / 40, gy = y / 40, ix = gx | 0, iy = gy | 0, fx = gx - ix, fy = gy - iy;
+    const low = (grid[iy * GN + ix] * (1 - fx) + grid[iy * GN + ix + 1] * fx) * (1 - fy) + (grid[(iy + 1) * GN + ix] * (1 - fx) + grid[(iy + 1) * GN + ix + 1] * fx) * fy;
+    const nz = ((h & 255) / 255 - 0.5) * 16 + low * 26;
     tex[i] = pack(clamp(d8[i * 4] + nz, 0, 255) | 0, clamp(d8[i * 4 + 1] + nz, 0, 255) | 0, clamp(d8[i * 4 + 2] + nz * 0.7, 0, 255) | 0);
   }
   c.fillStyle = '#000'; c.fillRect(0, 0, TS, TS);
@@ -405,30 +524,45 @@ function buildTrack(def) {
     if (def.id === 'kursk' && rng() < 0.25) kind = 'oak';
     trees.push({ x, y, kind, s: 0.8 + rng() * 0.5, r: kind === 'rock' ? 6 : 4 });
   }
-  const hills = makeHills(def, rng);
+  const hills = makeHills(def, rng), clouds = makeClouds(def, rng);
   const mini = document.createElement('canvas'); mini.width = 170; mini.height = 170;
   const mc = mini.getContext('2d'); const ms = 170 / TS;
   mc.beginPath(); pts.forEach((p, i) => i ? mc.lineTo(p.x * ms, p.y * ms) : mc.moveTo(p.x * ms, p.y * ms)); mc.closePath();
   mc.strokeStyle = 'rgba(21,20,14,.7)'; mc.lineWidth = 9; mc.stroke(); mc.strokeStyle = '#efe6cf'; mc.lineWidth = 4; mc.stroke();
   const outCols = def.out.map(a => pack(...a));
-  const T = { def, pts, N, tex, mask, trees, hills, mini, outCols, onRoadAt };
+  const T = { def, pts, N, tex, mask, trees, hills, clouds, mini, outCols, onRoadAt };
   trackCache[def.id] = T;
   return T;
 }
 
 function makeHills(def, rng) {
-  const cv = document.createElement('canvas'); cv.width = 1920; cv.height = 56;
+  const cv = document.createElement('canvas'); cv.width = 2560; cv.height = 76;
   const c = cv.getContext('2d');
   def.hills.forEach((colr, layer) => {
     const ph = [rng() * TAU, rng() * TAU, rng() * TAU];
-    c.fillStyle = colr; c.beginPath(); c.moveTo(0, 56);
-    for (let x = 0; x <= 1920; x += 4) {
-      const u = x / 1920 * TAU;
-      const h = (layer ? 12 : 26) + Math.sin(u * 3 + ph[0]) * 9 + Math.sin(u * 7 + ph[1]) * 5 + Math.sin(u * 17 + ph[2]) * 2.5;
-      c.lineTo(x, 56 - h);
+    c.fillStyle = colr; c.beginPath(); c.moveTo(0, 76);
+    for (let x = 0; x <= 2560; x += 4) {
+      const u = x / 2560 * TAU;
+      const h = (layer ? 16 : 35) + Math.sin(u * 3 + ph[0]) * 12 + Math.sin(u * 7 + ph[1]) * 7 + Math.sin(u * 17 + ph[2]) * 3;
+      c.lineTo(x, 76 - h);
     }
-    c.lineTo(1920, 56); c.closePath(); c.fill();
+    c.lineTo(2560, 76); c.closePath(); c.fill();
   });
+  return cv;
+}
+function makeClouds(def, rng) {
+  const cv = document.createElement('canvas'); cv.width = 2560; cv.height = 110;
+  const c = cv.getContext('2d');
+  const n = def.id === 'tobruk' ? 5 : 14;
+  for (let i = 0; i < n; i++) {
+    const x = rng() * 2560, y = 20 + rng() * 60, w = 40 + rng() * 90;
+    for (const wrap of [0, -2560, 2560]) {
+      c.fillStyle = 'rgba(160,168,176,.35)';
+      for (let k = 0; k < 6; k++) { c.beginPath(); c.ellipse(x + wrap + (k - 2.5) * w * 0.3, y + 4, w * 0.3, w * 0.1, 0, 0, TAU); c.fill(); }
+      c.fillStyle = 'rgba(255,255,255,.75)';
+      for (let k = 0; k < 6; k++) { c.beginPath(); c.ellipse(x + wrap + (k - 2.5) * w * 0.28, y - Math.sin(k / 5 * Math.PI) * w * 0.08, w * 0.22, w * 0.12, 0, 0, TAU); c.fill(); }
+    }
+  }
   return cv;
 }
 
@@ -878,14 +1012,21 @@ function render() {
   // sky + hills
   if (!T.skyGrad) { T.skyGrad = g.createLinearGradient(0, 0, 0, HZ); T.skyGrad.addColorStop(0, def.sky[0]); T.skyGrad.addColorStop(1, def.sky[1]); }
   g.fillStyle = T.skyGrad; g.fillRect(0, 0, W, HZ + 1);
-  let hx = -(((camA / TAU) * 1920) % 1920); if (hx > 0) hx -= 1920;
-  g.drawImage(T.hills, hx, HZ - 55); g.drawImage(T.hills, hx + 1920, HZ - 55);
-  const fog = g.createLinearGradient(0, HZ - 8, 0, HZ + 34);
+  const sunD = wrapA(-0.9 - camA);
+  if (Math.abs(sunD) < 1.2) {
+    const sxp = W / 2 + Math.tan(sunD) * F, sun = g.createRadialGradient(sxp, 34, 2, sxp, 34, 70);
+    sun.addColorStop(0, 'rgba(255,252,236,1)'); sun.addColorStop(0.12, 'rgba(255,246,214,.9)'); sun.addColorStop(1, 'rgba(255,240,200,0)');
+    g.fillStyle = sun; g.fillRect(sxp - 70, 0, 140, 110);
+  }
+  let hx = -(((camA / TAU) * 2560) % 2560); if (hx > 0) hx -= 2560;
+  g.drawImage(T.clouds, hx, 0); g.drawImage(T.clouds, hx + 2560, 0);
+  g.drawImage(T.hills, hx, HZ - 75); g.drawImage(T.hills, hx + 2560, HZ - 75);
+  const fog = g.createLinearGradient(0, HZ - 12, 0, HZ + 48);
   fog.addColorStop(0, def.fog + '0)'); fog.addColorStop(0.25, def.fog + '.85)'); fog.addColorStop(1, def.fog + '0)');
-  g.fillStyle = fog; g.fillRect(0, HZ - 8, W, 42);
+  g.fillStyle = fog; g.fillRect(0, HZ - 12, W, 60);
 
   // gather sprites
-  const items = [];
+  const items = []; tags.length = 0;
   const vis = (x, y, maxD = 1400) => {
     const dx = x - cam.x, dy = y - cam.y, d = dx * fx + dy * fy;
     if (d < 4 || d > maxD) return -1;
@@ -915,12 +1056,7 @@ function render() {
         g.fillStyle = 'rgba(0,0,0,.32)'; g.beginPath(); corners.forEach((p, i) => i ? g.lineTo(p[0], p[1]) : g.moveTo(p[0], p[1])); g.closePath(); g.fill();
       }
       drawModel(g, cam, o.model.faces, o.x, o.y, o.a, o.dead > 0 ? { mul: 0.35 } : o.flash > 0 ? { flash: o.flash * 3 } : null);
-      if (!o.isPlayer && it.d < 520) {
-        const p = project(cam, o.x, o.y, 13);
-        g.font = '8px Silkscreen, monospace'; g.textAlign = 'center';
-        g.fillStyle = 'rgba(0,0,0,.6)'; g.fillText(o.type.name.toUpperCase(), p[0] + 1, p[1] + 1);
-        g.fillStyle = o.type.tag; g.fillText(o.type.name.toUpperCase(), p[0], p[1]);
-      }
+      if (it.d < 760 && (!o.isPlayer || R.count > 0)) { const p = project(cam, o.x, o.y, 17); tags.push({ x: p[0], y: p[1], t: o, d: it.d }); }
     } else if (it.k === 'crate') {
       drawModel(g, cam, CRATE, o.x, o.y, R.time * 1.5 + o.x, null);
     } else if (it.k === 'hog') {
@@ -941,7 +1077,8 @@ function render() {
       if (b[2] < 2) continue;
       g.strokeStyle = '#ffe38f'; g.lineWidth = Math.max(1, 1.1 * s); g.beginPath(); g.moveTo(a[0], a[1]); g.lineTo(b[0], b[1]); g.stroke();
     } else if (it.k === 'part') {
-      const p = project(cam, o.x, o.y, o.z), r = Math.max(0.8, o.size * s), f = o.life / o.max;
+      if (it.d < 14) continue;
+      const p = project(cam, o.x, o.y, o.z), r = clamp(o.size * s, 0.8, 26), f = o.life / o.max;
       let c;
       if (o.kind === 'fire') c = `rgba(255,${(140 + 100 * f) | 0},60,${f})`;
       else if (o.kind === 'flash') c = 'rgba(255,240,180,1)';
@@ -957,8 +1094,10 @@ function render() {
       g.beginPath(); pts.forEach((p, i) => i ? g.lineTo(p[0], p[1]) : g.moveTo(p[0], p[1])); g.closePath(); g.stroke();
     }
   }
-  sx.drawImage(lo, 0, 0, 960, 600);
+  sx.setTransform(1, 0, 0, 1, 0, 0);
+  sx.drawImage(lo, 0, 0, scr.width, scr.height);
 }
+const tags = [];
 
 function txt(t, x, y, size, color, align = 'left', font = 'Silkscreen') {
   sx.font = `${size}px ${font}, monospace`; sx.textAlign = align; sx.textBaseline = 'alphabetic';
@@ -967,12 +1106,41 @@ function txt(t, x, y, size, color, align = 'left', font = 'Silkscreen') {
 }
 const fmt = s => { if (!isFinite(s)) return '--:--.--'; const m = Math.floor(s / 60), r = s - m * 60; return `${m}:${r < 10 ? '0' : ''}${r.toFixed(2)}`; };
 
-function drawHUD() {
-  const p = R.player;
-  if (!p) {
-    if (state === 'menu') return;
-    return;
+function drawTags() {
+  const k = 960 / W;
+  tags.sort((a, b) => b.d - a.d);
+  for (const tg of tags) {
+    const t = tg.t, x = tg.x * k, y = tg.y * k - 6;
+    const you = t.isPlayer, name = you ? 'YOU · ' + t.type.name.toUpperCase() : t.type.name.toUpperCase();
+    sx.globalAlpha = clamp((760 - tg.d) / 200, 0, 1) * (t.dead > 0 ? 0.5 : 1);
+    sx.font = '13px Silkscreen, monospace';
+    const w = Math.max(sx.measureText(name).width, 60) + 26, h = 30, x0 = clamp(x - w / 2, 4, 956 - w), y0 = y - h;
+    sx.fillStyle = 'rgba(21,20,14,.78)'; sx.fillRect(x0, y0, w, h);
+    sx.fillStyle = t.type.tag; sx.fillRect(x0, y0, 6, h);
+    sx.beginPath(); sx.moveTo(x - 6, y); sx.lineTo(x + 6, y); sx.lineTo(x, y + 7); sx.closePath(); sx.fillStyle = 'rgba(21,20,14,.78)'; sx.fill();
+    sx.textAlign = 'left'; sx.textBaseline = 'alphabetic';
+    sx.fillStyle = you ? '#f2c14e' : '#efe6cf'; sx.fillText(name, x0 + 14, y0 + 15);
+    sx.font = '9px Silkscreen, monospace'; sx.fillStyle = '#a39a7c'; sx.fillText(t.type.nation.toUpperCase(), x0 + 14, y0 + 26);
+    const bw = 34, bx = x0 + w - bw - 8;
+    sx.fillStyle = '#3a352a'; sx.fillRect(bx, y0 + 20, bw, 4);
+    sx.fillStyle = t.hp > 50 ? '#8fbf5a' : t.hp > 25 ? '#f2c14e' : '#e0592a'; sx.fillRect(bx, y0 + 20, bw * t.hp / 100, 4);
   }
+  sx.globalAlpha = 1;
+}
+const PORTRAIT_CAM = { x: -40, y: 0, h: 15, fx: 1, fy: 0, rx: 0, ry: 1, F: 185, cx: 109, hz: 402 };
+function drawHUD() {
+  sx.setTransform(scr.width / 960, 0, 0, scr.height / 600, 0, 0);
+  drawTags();
+  const p = R.player;
+  if (!p) return;
+  // portrait of your tank
+  sx.fillStyle = 'rgba(21,20,14,.62)'; sx.fillRect(24, 400, 170, 92);
+  sx.fillStyle = p.type.tag; sx.fillRect(24, 400, 170, 3);
+  sx.fillStyle = 'rgba(0,0,0,.35)'; sx.beginPath(); sx.ellipse(109, 472, 66, 10, 0, 0, TAU); sx.fill();
+  sx.save(); sx.beginPath(); sx.rect(24, 403, 170, 89); sx.clip();
+  drawModel(sx, PORTRAIT_CAM, p.model.faces, 0, 0, 2.5, p.dead > 0 ? { mul: 0.35 } : null);
+  sx.restore();
+  txt(p.type.nation.toUpperCase(), 186, 420, 9, '#a39a7c', 'right');
   const rank = rankings().indexOf(p);
   txt(ORD[rank], 24, 66, 52, rank === 0 ? '#f2c14e' : '#efe6cf', 'left', '"Black Ops One"');
   txt('/4', 24 + sx.measureText(ORD[rank]).width + 6, 66, 22, '#a39a7c');
@@ -1017,10 +1185,9 @@ function drawHUD() {
   if (R.count > 0 && R.count < 3.4) {
     const n = Math.ceil(R.count);
     for (let i = 0; i < 3; i++) {
-      sx.fillStyle = '#15140e'; sx.beginPath(); sx.arc(420 + i * 60, 210, 24, 0, TAU); sx.fill();
-      sx.fillStyle = 3 - i >= n ? '#e0592a' : '#3a352a'; sx.beginPath(); sx.arc(420 + i * 60, 210, 18, 0, TAU); sx.fill();
+      sx.fillStyle = '#15140e'; sx.beginPath(); sx.arc(420 + i * 60, 150, 24, 0, TAU); sx.fill();
+      sx.fillStyle = 3 - i >= n ? '#e0592a' : '#3a352a'; sx.beginPath(); sx.arc(420 + i * 60, 150, 18, 0, TAU); sx.fill();
     }
-    txt(String(n), 480, 300, 80, '#efe6cf', 'center', '"Black Ops One"');
   }
   const m = R.msgs[R.msgs.length - 1];
   if (m) txt(m.text, 480, 250, m.text.length > 14 ? 34 : 48, m.color, 'center', '"Black Ops One"');
@@ -1036,7 +1203,7 @@ TANKS.forEach(t => {
   const b = document.createElement('button');
   b.className = 'card'; b.type = 'button'; b.id = 'tank-' + t.id;
   const bar = (label, v) => `<span>${label}</span><span class="bar"><i style="width:${Math.round(clamp(v, 0.08, 1) * 100)}%"></i></span>`;
-  b.innerHTML = `<canvas width="240" height="140" aria-hidden="true"></canvas>
+  b.innerHTML = `<canvas width="360" height="210" aria-hidden="true"></canvas>
     <span class="nm">${t.name}<span class="nat">${t.nation.toUpperCase()}</span></span>
     <span class="stats">${bar('SPEED', (t.max - 100) / 60)}${bar('ACCEL', (t.acc - 40) / 50)}${bar('HANDLING', (t.turn - 1.5) / 0.9)}${bar('ARMOUR', (1.1 - t.taken) / 0.6)}${bar('GUN ' + t.gun, t.dmg / 45)}</span>
     <span class="blurb">${t.blurb}</span>`;
@@ -1062,12 +1229,12 @@ function syncMenu() {
   try { localStorage.setItem('wt-cfg', JSON.stringify(cfg)); } catch (e) { /* storage unavailable */ }
 }
 function drawPreviews(now) {
-  const cam = { x: -40, y: 0, h: 15, fx: 1, fy: 0, rx: 0, ry: 1, F: 150, cx: 120, hz: 38 };
+  const cam = { x: -40, y: 0, h: 15, fx: 1, fy: 0, rx: 0, ry: 1, F: 270, cx: 180, hz: 50 };
   for (const { t, c } of previews) {
     const ctx = c.getContext('2d');
-    const gr = ctx.createLinearGradient(0, 0, 0, 140); gr.addColorStop(0, '#2e2b21'); gr.addColorStop(1, '#15140e');
-    ctx.fillStyle = gr; ctx.fillRect(0, 0, 240, 140);
-    ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.beginPath(); ctx.ellipse(120, 96, 70, 12, 0, 0, TAU); ctx.fill();
+    const gr = ctx.createLinearGradient(0, 0, 0, 210); gr.addColorStop(0, '#2e2b21'); gr.addColorStop(1, '#15140e');
+    ctx.fillStyle = gr; ctx.fillRect(0, 0, 360, 210);
+    ctx.fillStyle = 'rgba(0,0,0,.4)'; ctx.beginPath(); ctx.ellipse(180, 152, 120, 20, 0, 0, TAU); ctx.fill();
     const spin = cfg.tank === t.id ? now / 1400 : 2.4;
     drawModel(ctx, cam, MODELS[t.id].faces, 0, 0, spin, null);
   }
