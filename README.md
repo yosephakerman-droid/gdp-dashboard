@@ -29,3 +29,4 @@ Open the file in any modern browser — no build step or server needed.
 - Supply crates hold Turbo, Mines, Salvo, Repair and an Artillery strike on the leader.
 - Tanks are modelled from the real vehicles' dimensions, with turrets that traverse onto the nearest target.
 - Infantry roadblocks (sandbag chicanes with riflemen, an MG and an anti-tank team) fire on passing tanks; shell them or ram the walls at speed.
+- Background music: an original synthesised march, or load your own audio file from the menu (Music → Your own song…).

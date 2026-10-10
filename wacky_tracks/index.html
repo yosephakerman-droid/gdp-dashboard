@@ -49,6 +49,9 @@ h1{font-family:var(--display);font-weight:400;font-size:clamp(26px,6.4cqw,64px);
 .row{display:flex;flex-wrap:wrap;gap:clamp(8px,2cqw,28px)}
 .seg{display:flex;flex-wrap:wrap;gap:4px}
 .seg button,.btn{font-family:var(--body);font-weight:600;font-size:clamp(11px,1.35cqw,15px);background:var(--panel);color:var(--paper);border:2px solid var(--line);padding:6px 12px;cursor:pointer}
+.filebtn{font-family:var(--body);font-weight:600;font-size:clamp(11px,1.35cqw,15px);background:var(--panel);color:var(--paper);border:2px solid var(--line);padding:6px 12px;cursor:pointer;max-width:22ch;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.filebtn:focus-visible{outline:3px solid var(--signal);outline-offset:2px}
+.filebtn[aria-pressed="true"]{border-color:var(--khaki);background:var(--panel-2);color:var(--khaki)}
 .seg button[aria-pressed="true"]{border-color:var(--khaki);background:var(--panel-2);color:var(--khaki)}
 .go{display:flex;flex-wrap:wrap;align-items:center;gap:10px 22px;margin-top:auto}
 .btn.primary{font-family:var(--display);font-weight:400;font-size:clamp(16px,2.4cqw,26px);background:var(--signal);border-color:var(--signal);color:var(--ink);padding:10px 26px;letter-spacing:.03em}
@@ -88,6 +91,11 @@ tr.you td{color:var(--khaki)}
       <div><h2 class="label">Battlefield</h2><div class="seg" id="trackSeg"></div></div>
       <div><h2 class="label">Opposition</h2><div class="seg" id="diffSeg"></div></div>
       <div><h2 class="label">Laps</h2><div class="seg" id="lapSeg"></div></div>
+      <div><h2 class="label">Music</h2><div class="seg" id="musicSeg">
+        <button type="button" id="music-march">March</button>
+        <label class="filebtn" id="music-file" tabindex="0">Your own song…<input type="file" id="musicFile" accept="audio/*" hidden></label>
+        <button type="button" id="music-off">Off</button>
+      </div></div>
     </div>
     <div class="go">
       <button class="btn primary" id="startBtn">Start engines</button>
@@ -797,7 +805,7 @@ function makeClouds(def, rng) {
 const ITEMS = ['TURBO', 'MINES', 'SALVO', 'REPAIR', 'ARTILLERY'];
 const ITEM_HINT = { TURBO: 'Engine overboost', MINES: 'Drop 3 behind you', SALVO: 'Three shells at once', REPAIR: '+50 armour', ARTILLERY: 'Shells the leader' };
 const DIFF = [{ id: 'recruit', name: 'Recruit', f: 0.88, aim: 0.55 }, { id: 'veteran', name: 'Veteran', f: 0.97, aim: 0.8 }, { id: 'ace', name: 'Ace', f: 1.04, aim: 1 }];
-const cfg = { tank: 'sherman', track: 'normandy', diff: 'veteran', laps: 3 };
+const cfg = { tank: 'sherman', track: 'normandy', diff: 'veteran', laps: 3, music: 'march' };
 try { Object.assign(cfg, JSON.parse(localStorage.getItem('wt-cfg') || '{}')); } catch (e) { /* storage unavailable */ }
 
 let state = 'menu';
@@ -897,9 +905,73 @@ function blip(f, dur, type = 'square', vol = 0.12) {
   o.type = type; o.frequency.setValueAtTime(f, t); gn.gain.setValueAtTime(vol, t); gn.gain.exponentialRampToValueAtTime(0.001, t + dur);
   o.connect(gn); gn.connect(S.master); o.start(t); o.stop(t + dur + 0.02);
 }
+// ---------------------------------------------------------------- music
+// An original march in D major at 116 bpm (brass melody, oom-pah bass, snare and bass drum),
+// or an audio file the player loads themselves.
+const MUSIC = { audio: null, name: '', next: 0, step: 0, gain: null };
+const MEL = [0, 0, 4, 7, 7, null, 4, 0, 5, 5, 9, 12, 9, null, 7, null, 7, 9, 7, 5, 4, 5, 4, 2, 0, 2, 4, 7, 0, null, null, null,
+  7, 7, 9, 11, 12, null, 11, 9, 7, 5, 4, 5, 7, null, 4, null, 5, 4, 2, 4, 5, 7, 9, 11, 12, 11, 9, 7, 12, null, null, null];
+const BASS = [0, -5, 0, -5, 5, 0, 5, 0, 7, 2, 7, 2, 0, -5, 0, -5, 0, -5, 0, -5, 5, 0, -5, 0, 2, 7, 2, -5, 0, -5, 0, 0];
+const hz = semi => 293.66 * Math.pow(2, semi / 12);
+function musicVoice(type, f, t, dur, vol, cutoff) {
+  const ac = S.ctx, o = ac.createOscillator(), gn = ac.createGain(), lp = ac.createBiquadFilter();
+  o.type = type; o.frequency.setValueAtTime(f, t);
+  lp.type = 'lowpass'; lp.frequency.value = cutoff;
+  gn.gain.setValueAtTime(0.0001, t); gn.gain.exponentialRampToValueAtTime(vol, t + 0.02); gn.gain.exponentialRampToValueAtTime(vol * 0.55, t + dur * 0.6); gn.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  o.connect(lp); lp.connect(gn); gn.connect(MUSIC.gain); o.start(t); o.stop(t + dur + 0.02);
+}
+function musicDrum(t, snare) {
+  const ac = S.ctx, gn = ac.createGain();
+  if (snare) {
+    const src = ac.createBufferSource(), bp = ac.createBiquadFilter();
+    src.buffer = S.noise; bp.type = 'bandpass'; bp.frequency.value = 1900; bp.Q.value = 0.8;
+    gn.gain.setValueAtTime(0.32, t); gn.gain.exponentialRampToValueAtTime(0.001, t + 0.11);
+    src.connect(bp); bp.connect(gn); src.start(t); src.stop(t + 0.13);
+  } else {
+    const o = ac.createOscillator(); o.frequency.setValueAtTime(120, t); o.frequency.exponentialRampToValueAtTime(45, t + 0.15);
+    gn.gain.setValueAtTime(0.5, t); gn.gain.exponentialRampToValueAtTime(0.001, t + 0.18);
+    o.connect(gn); o.start(t); o.stop(t + 0.2);
+  }
+  gn.connect(MUSIC.gain);
+}
+function musicStep(i, t, eighth) {
+  const n = MEL[i];
+  if (n !== null) {
+    let len = 1; while (len < 4 && MEL[(i + len) % MEL.length] === null) len++;
+    const d = eighth * len * 0.95;
+    musicVoice('sawtooth', hz(n), t, d, 0.09, 2200); musicVoice('sawtooth', hz(n) * 1.004, t, d, 0.06, 1600);
+    musicVoice('square', hz(n - 12), t, d, 0.025, 900);
+  }
+  if (i % 2 === 0) musicVoice('triangle', hz(BASS[i / 2] - 24), t, eighth * 1.6, 0.22, 600);
+  if (i % 4 === 0) musicDrum(t, false);
+  if (i % 4 === 2 || (i % 32 >= 29)) musicDrum(t, true);
+}
+function musicTick() {
+  if (!S.ctx || !MUSIC.gain) return;
+  const on = cfg.music === 'march' && state !== 'paused';
+  MUSIC.gain.gain.setTargetAtTime(on ? 0.28 : 0, S.ctx.currentTime, 0.15);
+  if (!on) { MUSIC.next = 0; return; }
+  const eighth = 60 / 116 / 2;
+  if (MUSIC.next < S.ctx.currentTime) MUSIC.next = S.ctx.currentTime + 0.05;
+  while (MUSIC.next < S.ctx.currentTime + 0.25) { musicStep(MUSIC.step, MUSIC.next, eighth); MUSIC.step = (MUSIC.step + 1) % MEL.length; MUSIC.next += eighth; }
+}
+setInterval(musicTick, 60);
+function syncMusic() {
+  if (S.ctx && !MUSIC.gain) { MUSIC.gain = S.ctx.createGain(); MUSIC.gain.gain.value = 0; MUSIC.gain.connect(S.master); }
+  const a = MUSIC.audio;
+  if (a) {
+    a.muted = S.muted;
+    const play = cfg.music === 'file' && state !== 'paused';
+    if (play && a.paused) a.play().catch(() => {});
+    if (!play && !a.paused) a.pause();
+  }
+  musicTick();
+}
+
 function setMuted(m) {
   S.muted = m; try { localStorage.setItem('wt-mute', m ? '1' : '0'); } catch (e) { /* storage unavailable */ }
   if (S.master) S.master.gain.value = m ? 0 : 0.5;
+  if (MUSIC.audio) MUSIC.audio.muted = m;
   document.getElementById('muteBtn').textContent = 'Sound: ' + (m ? 'off' : 'on');
 }
 const distVol = (x, y) => { const f = R && (R.player || R.tanks[R.focus]); if (!f) return 0; return clamp(1 - Math.hypot(x - f.x, y - f.y) / 700, 0, 1); };
@@ -1818,11 +1890,27 @@ function seg(el, list, key, label) {
 seg(document.getElementById('trackSeg'), TRACKS, 'track', v => v.name);
 seg(document.getElementById('diffSeg'), DIFF, 'diff', v => v.name);
 seg(document.getElementById('lapSeg'), [{ id: 3 }, { id: 5 }], 'laps', v => v.id + ' laps');
+function setMusic(mode) { cfg.music = mode; initAudio(); syncMenu(); syncMusic(); }
+document.getElementById('music-march').addEventListener('click', () => setMusic('march'));
+document.getElementById('music-off').addEventListener('click', () => setMusic('off'));
+document.getElementById('music-file').addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); document.getElementById('musicFile').click(); } });
+document.getElementById('musicFile').addEventListener('change', e => {
+  const f = e.target.files && e.target.files[0];
+  if (!f) return;
+  if (MUSIC.audio) { MUSIC.audio.pause(); URL.revokeObjectURL(MUSIC.audio.src); }
+  const a = new Audio(URL.createObjectURL(f));
+  a.loop = true; a.volume = 0.5;
+  MUSIC.audio = a; MUSIC.name = f.name.replace(/\.[^.]+$/, '');
+  document.getElementById('music-file').firstChild.textContent = '♪ ' + MUSIC.name;
+  setMusic('file');
+});
 function syncMenu() {
   TANKS.forEach(t => document.getElementById('tank-' + t.id).setAttribute('aria-pressed', cfg.tank === t.id));
   TRACKS.forEach(t => document.getElementById('track-' + t.id).setAttribute('aria-pressed', cfg.track === t.id));
   DIFF.forEach(d => document.getElementById('diff-' + d.id).setAttribute('aria-pressed', cfg.diff === d.id));
   [3, 5].forEach(n => document.getElementById('laps-' + n).setAttribute('aria-pressed', cfg.laps === n));
+  if (cfg.music === 'file' && !MUSIC.audio) cfg.music = 'march';
+  ['march', 'file', 'off'].forEach(k => document.getElementById('music-' + k).setAttribute('aria-pressed', cfg.music === k));
   try { localStorage.setItem('wt-cfg', JSON.stringify(cfg)); } catch (e) { /* storage unavailable */ }
 }
 function drawPreviews(now) {
@@ -1843,14 +1931,15 @@ function show(id) { ['menu', 'pause', 'results'].forEach(k => { $(k).hidden = k 
 function startDemo() { R = newRace({ track: cfg.track, tank: cfg.tank, demo: true, laps: 99, diff: 'veteran' }); }
 function startRace() {
   initAudio();
+  setTimeout(syncMusic, 0);
   R = newRace({ track: cfg.track, tank: cfg.tank, demo: false, laps: cfg.laps, diff: cfg.diff });
   state = 'race'; show(null);
   $('touch').hidden = !matchMedia('(pointer: coarse)').matches;
   scr.focus?.();
 }
-function toMenu() { state = 'menu'; show('menu'); $('touch').hidden = true; startDemo(); }
-function pause() { if (state !== 'race') return; state = 'paused'; show('pause'); }
-function resume() { if (state !== 'paused') return; state = 'race'; show(null); }
+function toMenu() { state = 'menu'; show('menu'); $('touch').hidden = true; startDemo(); syncMusic(); }
+function pause() { if (state !== 'race') return; state = 'paused'; show('pause'); syncMusic(); }
+function resume() { if (state !== 'paused') return; state = 'race'; show(null); syncMusic(); }
 
 function showResults() {
   state = 'results';
