@@ -2,13 +2,13 @@
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Frank+Ruhl+Libre:wght@500;700;900&family=Assistant:wght@400;600;700&family=Noto+Rashi+Hebrew:wght@400;600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Frank+Ruhl+Libre:wght@500;700;900&family=Assistant:wght@400;600;700&family=Noto+Rashi+Hebrew:wght@400;600;700&display=swap">
 <style>
-/* Layout: one narrow reading column, sticky tab bar, the daf diagram as the signature element */
+/* Layout: the real daf is the centre of everything; a bottom sheet opens per segment; guided mode walks the same segments */
 :root{
   --paper:#F1F3F0; --sheet:#FBFCFA; --ink:#1C222B; --muted:#5D6672; --line:#D5DAD6;
   --accent:#1F5A7A; --accent-soft:#DCE8EF; --gold:#8C6A16; --gold-soft:#F2E8CF;
-  --ok:#2F7A4B; --ok-soft:#DDEFE3; --bad:#A3392E; --bad-soft:#F5DEDA;
+  --ok:#2F7A4B; --ok-soft:#DDEFE3; --bad:#A3392E; --bad-soft:#F5DEDA; --shadow:rgba(20,30,40,.18);
   --f-display:"Frank Ruhl Libre","David Libre","Times New Roman",serif;
   --f-body:"Assistant","Segoe UI",Arial,sans-serif;
   --f-rashi:"Noto Rashi Hebrew","Frank Ruhl Libre",serif;
@@ -16,197 +16,189 @@
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
   --paper:#13171C; --sheet:#1B2027; --ink:#E7E4DB; --muted:#9AA3AE; --line:#2E353E;
   --accent:#86BAD8; --accent-soft:#1D3342; --gold:#D8B45A; --gold-soft:#3A3120;
-  --ok:#7CC796; --ok-soft:#1C3326; --bad:#E58C80; --bad-soft:#3D2220; color-scheme:dark}}
+  --ok:#7CC796; --ok-soft:#1C3326; --bad:#E58C80; --bad-soft:#3D2220; --shadow:rgba(0,0,0,.5); color-scheme:dark}}
 :root[data-theme="dark"]{
   --paper:#13171C; --sheet:#1B2027; --ink:#E7E4DB; --muted:#9AA3AE; --line:#2E353E;
   --accent:#86BAD8; --accent-soft:#1D3342; --gold:#D8B45A; --gold-soft:#3A3120;
-  --ok:#7CC796; --ok-soft:#1C3326; --bad:#E58C80; --bad-soft:#3D2220; color-scheme:dark}
+  --ok:#7CC796; --ok-soft:#1C3326; --bad:#E58C80; --bad-soft:#3D2220; --shadow:rgba(0,0,0,.5); color-scheme:dark}
 
 *{box-sizing:border-box}
 body{background:var(--paper);color:var(--ink);font-family:var(--f-body);font-size:17px;line-height:1.65;direction:rtl}
 body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--paper)}
-.wrap{max-width:760px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:20px 48px}
+.wrap{max-width:1040px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:20px 120px}
 h1,h2,h3{font-family:var(--f-display);text-wrap:balance;line-height:1.25;margin:0}
 h1{font-size:clamp(30px,7vw,44px);font-weight:900}
-h2{font-size:26px;font-weight:700}
-h3{font-size:20px;font-weight:700}
+h2{font-size:24px;font-weight:700}
+h3{font-size:19px;font-weight:700}
 p{margin:0}
-.lede{color:var(--muted);max-width:60ch}
-header.top{display:grid;gap:8px;padding-block:8px 16px}
+a{color:var(--accent)}
+.lede{color:var(--muted);max-width:62ch}
+.muted{color:var(--muted)}
+header.top{display:grid;gap:6px;padding-block:6px 14px}
 .eyebrow{font-size:13px;letter-spacing:.06em;color:var(--gold);font-weight:700}
 
 nav.tabs{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--paper);display:flex;gap:6px;overflow-x:auto;padding-block:10px;border-bottom:1px solid var(--line);scrollbar-width:none}
 nav.tabs button{flex:0 0 auto;font:600 15px var(--f-body);color:var(--muted);background:transparent;border:1px solid transparent;border-radius:999px;padding:7px 14px;cursor:pointer}
 nav.tabs button[aria-selected="true"]{color:var(--accent);background:var(--accent-soft);border-color:var(--accent)}
-button:focus-visible,.seg:focus-visible,.region:focus-visible,input:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
+button:focus-visible,.seg:focus-visible,.w:focus-visible,textarea:focus-visible,input:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
 
-section.panel{display:grid;gap:20px;padding-top:22px}
-.card{background:var(--sheet);border:1px solid var(--line);border-radius:10px;padding:18px}
+section.panel{display:grid;gap:18px;padding-top:20px}
+.card{background:var(--sheet);border:1px solid var(--line);border-radius:10px;padding:16px;display:grid;gap:10px;min-width:0}
 .note{font-size:14px;color:var(--muted);border-inline-start:3px solid var(--gold);padding-inline-start:10px}
-.note b{color:var(--gold)}
-a{color:var(--accent)}
-
-/* Daf diagram */
-.daf{display:grid;grid-template-columns:1fr 2.2fr 1fr;grid-template-rows:auto 1fr auto;gap:6px;background:var(--sheet);border:1px solid var(--line);border-radius:6px;padding:10px;aspect-ratio:3/4;max-width:100%;max-height:520px;margin-inline:auto;width:100%}
-.region{border:1px dashed var(--line);border-radius:4px;padding:6px;display:flex;flex-direction:column;gap:4px;cursor:pointer;background:transparent;color:var(--ink);font:inherit;text-align:center;justify-content:center;align-items:center;min-width:0}
-.region .lbl{font-weight:700;font-size:14px;font-family:var(--f-display)}
-.region .lines{width:100%;display:grid;gap:4px}
-.region .lines i{display:block;height:4px;border-radius:2px;background:var(--line)}
-.region[aria-pressed="true"]{border-style:solid;border-color:var(--accent);background:var(--accent-soft)}
-.region[aria-pressed="true"] .lines i{background:var(--accent)}
-.r-head{grid-column:1/4;flex-direction:row;gap:12px}
-.r-rashi{grid-column:1;grid-row:2}
-.r-gemara{grid-column:2;grid-row:2;border-width:2px}
-.r-tosafot{grid-column:3;grid-row:2}
-.r-margin{grid-column:1/4;grid-row:3;flex-direction:row;flex-wrap:wrap;gap:6px}
-.r-margin span{font-size:12px;color:var(--muted)}
-.info{min-height:120px}
-.info .sample{font-family:var(--f-display);font-size:19px;background:var(--paper);padding:10px 12px;border-radius:6px;margin-top:10px}
-.info .sample.rashi{font-family:var(--f-rashi);font-size:17px}
-
-/* Steps */
-ol.steps{list-style:none;margin:0;padding:0;display:grid;gap:10px;counter-reset:s}
-ol.steps li{counter-increment:s;display:grid;grid-template-columns:auto 1fr auto;gap:12px;align-items:start;background:var(--sheet);border:1px solid var(--line);border-radius:10px;padding:14px}
-ol.steps li::before{content:counter(s);font:900 22px var(--f-display);color:var(--gold);min-width:1.2em;text-align:center}
-ol.steps li.done{border-color:var(--ok);background:var(--ok-soft)}
-ol.steps .s-body{display:grid;gap:4px;min-width:0}
-ol.steps .s-body small{color:var(--muted);font-size:14.5px}
-.check{width:28px;height:28px;border-radius:6px;border:2px solid var(--line);background:var(--sheet);cursor:pointer;color:var(--ok);font-weight:900;font-size:16px;line-height:1}
-li.done .check{border-color:var(--ok);background:var(--ok);color:var(--sheet)}
+.chip{display:inline-block;font-size:13px;font-weight:700;padding:2px 10px;border-radius:999px;background:var(--accent-soft);color:var(--accent)}
+.chip.gold{background:var(--gold-soft);color:var(--gold)}
+.btn{font:700 15px var(--f-body);padding:9px 16px;border-radius:8px;border:1px solid var(--accent);background:var(--accent);color:var(--sheet);cursor:pointer}
+.btn.ghost{background:transparent;color:var(--accent)}
+.btn:disabled{opacity:.45;cursor:default}
+.row{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between}
 .progress{display:flex;align-items:center;gap:10px;font-size:14px;color:var(--muted)}
-.bar{flex:1;height:8px;border-radius:4px;background:var(--line);overflow:hidden}
+.bar{flex:1;height:8px;border-radius:4px;background:var(--line);overflow:hidden;min-width:60px}
 .bar>i{display:block;height:100%;background:var(--ok);width:0;transition:width .3s}
 
-/* Moves legend */
-.moves{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px}
-.move{display:grid;gap:2px;padding:10px 12px;border-radius:8px;background:var(--sheet);border:1px solid var(--line)}
-.move b{font-family:var(--f-display);font-size:18px}
-.move span{font-size:14.5px;color:var(--muted)}
+/* ---------- The daf ---------- */
+.dafhead{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:baseline;gap:8px;border-bottom:2px solid var(--ink);padding-bottom:6px;font-family:var(--f-display)}
+.dafhead b{font-size:22px}
+.daf{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.7fr) minmax(0,1fr);grid-template-areas:"rashi gemara tos";gap:14px;background:var(--sheet);border:1px solid var(--line);border-radius:6px;padding:14px}
+.col{min-width:0;display:grid;align-content:start;gap:6px}
+.col>h4{margin:0;font:700 13px var(--f-body);color:var(--gold);letter-spacing:.04em;border-bottom:1px solid var(--line);padding-bottom:4px}
+.c-rashi{grid-area:rashi}.c-gemara{grid-area:gemara}.c-tos{grid-area:tos}
+.gtext{font-family:var(--f-display);font-size:20px;line-height:1.9;text-align:justify}
+.gtext .blk{display:block;margin-bottom:10px}
+.open{font-weight:900;font-size:1.25em;color:var(--gold)}
+.seg{cursor:pointer;border-radius:4px;padding:1px 2px;transition:background .15s;-webkit-box-decoration-break:clone;box-decoration-break:clone}
+.seg:hover{background:var(--gold-soft)}
+.seg.sel{background:var(--accent-soft);box-shadow:inset 0 -2px 0 var(--accent)}
+.seg.done::after{content:"✓";font:700 12px var(--f-body);color:var(--ok);vertical-align:super;margin-inline-start:2px}
+.w{border-bottom:1.5px dotted var(--accent);cursor:help}
+.ctext{font-family:var(--f-rashi);font-size:15px;line-height:1.75;text-align:justify}
+.ctext p{margin:0 0 6px;border-radius:4px;padding:2px 4px;transition:background .15s;cursor:pointer}
+.ctext p.sel{background:var(--accent-soft)}
+.dh{font-weight:700}
+.cempty{font:14px var(--f-body);color:var(--muted)}
+@media (max-width:760px){
+  .daf{grid-template-columns:minmax(0,1fr) minmax(0,1fr);grid-template-areas:"gemara gemara" "rashi tos";padding:12px;gap:12px}
+  .gtext{font-size:19px}
+  .ctext{font-size:13.5px}
+}
+@media (max-width:420px){
+  .daf{grid-template-columns:minmax(0,1fr);grid-template-areas:"gemara" "rashi" "tos"}
+}
 
-/* Sugya practice */
-.source{font-family:var(--f-display);font-size:13px;color:var(--muted)}
-.mishnah{font-family:var(--f-display);font-size:20px;line-height:1.8;background:var(--gold-soft);border-radius:8px;padding:14px}
-.seg{display:grid;gap:10px;background:var(--sheet);border:1px solid var(--line);border-radius:10px;padding:14px}
-.seg .aram{font-family:var(--f-display);font-size:21px;line-height:1.75;font-weight:500}
-.seg .q{font-size:14px;color:var(--muted);font-weight:600}
+/* word popover */
+#pop{position:absolute;z-index:30;max-width:260px;background:var(--ink);color:var(--paper);border-radius:8px;padding:8px 12px;font-size:15px;line-height:1.4;box-shadow:0 6px 20px var(--shadow)}
+#pop b{font-family:var(--f-display);font-size:17px}
+#pop small{display:block;opacity:.75;font-size:12px;margin-top:2px}
+
+/* bottom sheet */
+#sheet{position:fixed;overscroll-behavior:contain;inset:auto 0 0 0;z-index:20;background:var(--sheet);border-top:1px solid var(--line);box-shadow:0 -10px 30px var(--shadow);border-radius:14px 14px 0 0;max-height:62vh;overflow-y:auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-bottom:calc(16px + env(safe-area-inset-bottom,0px));padding-top:0}
+#sheet .inner{max-width:760px;margin:0 auto;display:grid;gap:12px}
+#sheet .grab{position:sticky;top:0;background:var(--sheet);display:flex;justify-content:space-between;align-items:center;gap:8px;padding-block:12px 8px;border-bottom:1px solid var(--line)}
+.x{font:700 20px var(--f-body);background:transparent;border:0;color:var(--muted);cursor:pointer;padding:4px 10px}
+.sgtext{font-family:var(--f-display);font-size:21px;line-height:1.8}
+details{border:1px solid var(--line);border-radius:8px;padding:8px 12px;background:var(--paper)}
+details>summary{cursor:pointer;font-weight:700;font-size:15px}
+details[open]>summary{margin-bottom:6px}
+.stz{font-size:16px;line-height:1.75}
+.stz b{font-family:var(--f-display);font-size:1.05em}
+.stz small{color:var(--muted);font-size:.95em}
+.stz .sec{display:none}
+.words{display:flex;flex-wrap:wrap;gap:6px}
+.words span{font-size:14px;background:var(--paper);border:1px solid var(--line);border-radius:6px;padding:2px 8px}
+.words span b{font-family:var(--f-display)}
+
+/* guided */
+.sections{display:flex;flex-wrap:wrap;gap:8px}
+.sections button{font:600 14px var(--f-body);padding:6px 12px;border-radius:999px;border:1px solid var(--line);background:var(--sheet);color:var(--ink);cursor:pointer}
+.sections button.on{border-color:var(--accent);color:var(--accent);background:var(--accent-soft)}
+.step{display:grid;gap:8px;padding:14px;border:1px solid var(--line);border-radius:10px;background:var(--sheet)}
+.step>h3{display:flex;gap:10px;align-items:baseline}
+.step>h3 .n{font:900 20px var(--f-display);color:var(--gold)}
+.step .hint{font-size:14px;color:var(--muted)}
 .choices{display:flex;flex-wrap:wrap;gap:8px}
 .choices button{font:600 15px var(--f-body);padding:7px 14px;border-radius:999px;border:1px solid var(--line);background:var(--paper);color:var(--ink);cursor:pointer}
 .choices button.right{background:var(--ok-soft);border-color:var(--ok);color:var(--ok)}
 .choices button.wrong{background:var(--bad-soft);border-color:var(--bad);color:var(--bad)}
 .choices button:disabled{cursor:default}
-.reveal{display:grid;gap:6px;border-top:1px solid var(--line);padding-top:10px}
-.reveal .tr{font-weight:600}
-.reveal .ex{color:var(--muted);font-size:15.5px}
-.chip{display:inline-block;font-size:13px;font-weight:700;padding:2px 10px;border-radius:999px;background:var(--accent-soft);color:var(--accent)}
-.score{font:700 15px var(--f-body);color:var(--accent)}
-.row{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between}
-.btn{font:700 15px var(--f-body);padding:9px 16px;border-radius:8px;border:1px solid var(--accent);background:var(--accent);color:var(--sheet);cursor:pointer}
-.btn.ghost{background:transparent;color:var(--accent)}
+textarea{width:100%;min-height:90px;font:16px var(--f-body);padding:10px;border-radius:8px;border:1px solid var(--line);background:var(--paper);color:var(--ink);resize:vertical}
+.segnav{display:flex;gap:6px;flex-wrap:wrap}
+.segnav button{width:34px;height:34px;border-radius:8px;border:1px solid var(--line);background:var(--sheet);color:var(--ink);font:700 14px var(--f-body);cursor:pointer;font-variant-numeric:tabular-nums}
+.segnav button.cur{border-color:var(--accent);background:var(--accent-soft);color:var(--accent)}
+.segnav button.done{border-color:var(--ok);color:var(--ok)}
 
-/* Flashcards + glossary */
-.flash{display:grid;place-items:center;text-align:center;min-height:210px;background:var(--sheet);border:1px solid var(--line);border-radius:12px;padding:22px;cursor:pointer;gap:8px;width:100%;font:inherit;color:var(--ink)}
-.flash .term{font:900 clamp(34px,9vw,48px) var(--f-display)}
+/* words */
+.flash{display:grid;place-items:center;text-align:center;min-height:220px;background:var(--sheet);border:1px solid var(--line);border-radius:12px;padding:22px;cursor:pointer;gap:8px;width:100%;font:inherit;color:var(--ink)}
+.flash .term{font:900 clamp(32px,9vw,46px) var(--f-display)}
 .flash .hint{font-size:14px;color:var(--muted)}
 .flash .mean{font-size:20px;font-weight:700;color:var(--accent)}
-.flash .use{font-size:15px;color:var(--muted);max-width:46ch}
+.flash .ctx{font:18px var(--f-display);color:var(--muted);max-width:46ch}
+.flash .ctx mark{background:var(--gold-soft);color:var(--ink);padding:0 2px;border-radius:3px}
 .flash-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-.flash-actions .btn.no{background:var(--bad-soft);color:var(--bad);border-color:var(--bad)}
-.flash-actions .btn.yes{background:var(--ok-soft);color:var(--ok);border-color:var(--ok)}
-input[type=search]{width:100%;font:16px var(--f-body);padding:10px 12px;border-radius:8px;border:1px solid var(--line);background:var(--sheet);color:var(--ink)}
-.gloss{display:grid;gap:0;background:var(--sheet);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.btn.no{background:var(--bad-soft);color:var(--bad);border-color:var(--bad)}
+.btn.yes{background:var(--ok-soft);color:var(--ok);border-color:var(--ok)}
+.gloss{display:grid;background:var(--sheet);border:1px solid var(--line);border-radius:10px;overflow:hidden;margin:0}
 .gloss div{display:grid;grid-template-columns:minmax(110px,30%) 1fr;gap:12px;padding:10px 14px;border-bottom:1px solid var(--line)}
 .gloss div:last-child{border-bottom:0}
 .gloss dt{font:700 18px var(--f-display);margin:0}
 .gloss dd{margin:0;min-width:0}
-.gloss dd small{display:block;color:var(--muted);font-size:14px}
+.gloss dd small{display:block;color:var(--muted);font-size:13.5px}
+.gloss dd button{font:600 13px var(--f-body);background:none;border:0;color:var(--accent);cursor:pointer;padding:0;text-decoration:underline}
 .gloss .known dt::after{content:" ✓";color:var(--ok);font-size:14px}
-.empty{padding:14px;color:var(--muted)}
 
-@media (max-width:480px){
-  .daf{aspect-ratio:auto;min-height:420px}
-  .region .lbl{font-size:12.5px}
-}
+/* method */
+ol.steps{margin:0;padding-inline-start:22px;display:grid;gap:8px}
+ol.steps li::marker{font:900 18px var(--f-display);color:var(--gold)}
+.moves{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px}
+.move{display:grid;gap:2px;padding:10px 12px;border-radius:8px;background:var(--sheet);border:1px solid var(--line)}
+.move b{font-family:var(--f-display);font-size:18px}
+.move span{font-size:14.5px;color:var(--muted)}
+.two{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
 
 <div class="wrap">
   <header class="top">
-    <span class="eyebrow">כלי לימוד צעד אחר צעד</span>
+    <span class="eyebrow">לומדים גמרא על דף אמיתי</span>
     <h1>מורה דרך לגמרא</h1>
-    <p class="lede">איך קוראים דף גמרא, איך מפרקים סוגיה לשאלות ותשובות, והמילים בארמית שחוזרות בכל דף. ההתקדמות שלך נשמרת בדפדפן הזה בלבד.</p>
+    <p class="lede">כל הלימוד כאן נעשה על דף אחד: מסכת ברכות, דף ב עמוד א. זה הדף הראשון בש"ס, והוא מופיע כאן עם רש"י ותוספות. לחצו על קטע בדף כדי לפתוח אותו עם רש"י, ביאור ותוספות. לחיצה על מילה עם קו מנוקד מציגה את התרגום שלה.</p>
   </header>
 
   <nav class="tabs" role="tablist" aria-label="חלקי הכלי">
-    <button role="tab" id="tab-daf" aria-controls="p-daf" aria-selected="true">1. מבנה הדף</button>
-    <button role="tab" id="tab-method" aria-controls="p-method" aria-selected="false">2. שיטת הלימוד</button>
-    <button role="tab" id="tab-sugya" aria-controls="p-sugya" aria-selected="false">3. תרגול סוגיה</button>
-    <button role="tab" id="tab-words" aria-controls="p-words" aria-selected="false">4. מילון ארמית</button>
+    <button role="tab" id="tab-daf" aria-controls="p-daf" aria-selected="true">הדף</button>
+    <button role="tab" id="tab-learn" aria-controls="p-learn" aria-selected="false">לימוד מודרך</button>
+    <button role="tab" id="tab-words" aria-controls="p-words" aria-selected="false">מילון הדף</button>
+    <button role="tab" id="tab-how" aria-controls="p-how" aria-selected="false">איך קוראים דף</button>
   </nav>
 
-  <!-- 1. Daf -->
+  <!-- DAF -->
   <section class="panel" id="p-daf" role="tabpanel" aria-labelledby="tab-daf">
+    <div class="progress"><span id="dafProg"></span><div class="bar"><i id="dafBar"></i></div></div>
     <div>
-      <h2>מה רואים על הדף</h2>
-      <p class="lede">דף גמרא בדפוס וילנא בנוי כמו מפה: הטקסט במרכז, והפירושים מסביב. לחצו על כל חלק בסכמה.</p>
+      <div class="dafhead"><b>מסכת ברכות</b><span>פרק ראשון · מאימתי</span><b>דף ב.</b></div>
+      <div class="daf" id="daf">
+        <div class="col c-rashi"><h4>רש"י</h4><div class="ctext" id="colRashi"></div></div>
+        <div class="col c-gemara"><h4>משנה וגמרא</h4><div class="gtext" id="colGemara"></div></div>
+        <div class="col c-tos"><h4>תוספות</h4><div class="ctext" id="colTos"></div></div>
+      </div>
     </div>
-    <div class="daf" id="daf">
-      <button class="region r-head" data-r="head" aria-pressed="false"><span class="lbl">כותרת: שם המסכת · פרק · דף</span></button>
-      <button class="region r-rashi" data-r="rashi" aria-pressed="false"><span class="lbl">רש"י</span><span class="lines"><i></i><i></i><i></i><i></i><i></i><i></i></span></button>
-      <button class="region r-gemara" data-r="gemara" aria-pressed="true"><span class="lbl">משנה + גמרא</span><span class="lines"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span></button>
-      <button class="region r-tosafot" data-r="tosafot" aria-pressed="false"><span class="lbl">תוספות</span><span class="lines"><i></i><i></i><i></i><i></i><i></i><i></i></span></button>
-      <button class="region r-margin" data-r="margin" aria-pressed="false"><span class="lbl">שוליים:</span><span>עין משפט</span><span>מסורת הש"ס</span><span>תורה אור</span><span>הגהות</span></button>
-    </div>
-    <div class="card info" id="dafInfo" aria-live="polite"></div>
-    <p class="note"><b>שימו לב:</b> זו סכמה מפושטת. המיקום המדויק של חלקי השוליים משתנה מדף לדף. כדאי לפתוח דף מודפס או סרוק ולזהות כל חלק.</p>
+    <p class="note">הטקסטים הם נוסח דפוס וילנא, ונלקחו מספריא. החלוקה לקטעים היא של ספריא, ובדף המודפס אין חלוקה כזו. כאן הטקסט מסודר בשלוש עמודות שמחקות את הדף המודפס, אבל לא שומר על העימוד המקורי. אפשר לראות גם <a href="https://commons.wikimedia.org/wiki/File:Berakhot2a.jpg" target="_blank" rel="noopener">סריקה של הדף המודפס</a>.</p>
   </section>
 
-  <!-- 2. Method -->
-  <section class="panel" id="p-method" role="tabpanel" aria-labelledby="tab-method" hidden>
+  <!-- GUIDED -->
+  <section class="panel" id="p-learn" role="tabpanel" aria-labelledby="tab-learn" hidden>
     <div>
-      <h2>שבעה שלבים לכל קטע</h2>
-      <p class="lede">עובדים על קטע קצר, בערך 5–10 שורות. מסמנים כל שלב כשמסיימים אותו.</p>
+      <h2>לימוד מודרך, קטע אחר קטע</h2>
+      <p class="lede">עוברים על הדף קטע אחרי קטע, ובכל קטע עושים את אותם שבעה שלבים. בסוף כל קטע מסמנים "סיימתי".</p>
     </div>
-    <div class="progress"><span id="stepCount">0 / 7</span><div class="bar"><i id="stepBar"></i></div><button class="btn ghost" id="stepReset" type="button">איפוס</button></div>
-    <ol class="steps" id="steps"></ol>
-
-    <div>
-      <h2>המהלכים של הסוגיה</h2>
-      <p class="lede">הגמרא היא ויכוח כתוב ("שקלא וטריא", כלומר משא ומתן). כמעט כל משפט הוא אחד מהמהלכים האלה. אם מזהים את המהלך, מבינים את הכיוון.</p>
-    </div>
-    <div class="moves" id="moves"></div>
-
-    <div class="card" style="display:grid;gap:8px">
-      <h3>איך מתחילים בפועל</h3>
-      <p>• <b>זמן קבוע:</b> 20–30 דקות ביום מתאימות יותר מלימוד ארוך פעם בשבוע.</p>
-      <p>• <b>חברותא:</b> לימוד בזוג, כשכל אחד קורא ומסביר בתורו. זו הדרך המסורתית.</p>
-      <p>• <b>עזרים:</b> מהדורה מתורגמת ומבוארת (למשל שטיינזלץ), או הטקסט והתרגום החינמיים ב<a href="https://www.sefaria.org/Berakhot.2a" target="_blank" rel="noopener">ספריא</a>.</p>
-      <p>• <b>איפה מתחילים:</b> הרבה מתחילים במסכת ברכות, או בפרק "אלו מציאות" בבבא מציעא. אלה המלצות מקובלות, לא כלל.</p>
-    </div>
+    <div class="sections" id="secBtns"></div>
+    <div class="segnav" id="segNav" aria-label="קטעים"></div>
+    <div id="guide" style="display:grid;gap:12px"></div>
   </section>
 
-  <!-- 3. Sugya -->
-  <section class="panel" id="p-sugya" role="tabpanel" aria-labelledby="tab-sugya" hidden>
-    <div>
-      <h2>תרגול: ברכות ב ע"א</h2>
-      <p class="lede">הסוגיה הראשונה בש"ס. קראו כל קטע ונחשו איזה מהלך הוא. אחרי הניחוש יופיעו התרגום וההסבר.</p>
-    </div>
-    <div class="card" style="display:grid;gap:8px">
-      <span class="chip" style="justify-self:start">משנה</span>
-      <p class="mishnah">מאימתי קורין את שמע בערבין? משעה שהכהנים נכנסים לאכול בתרומתן, עד סוף האשמורה הראשונה, דברי רבי אליעזר. וחכמים אומרים: עד חצות. רבן גמליאל אומר: עד שיעלה עמוד השחר.</p>
-      <p class="ex" style="color:var(--muted);font-size:15.5px">פשט: מאיזו שעה אפשר לקרוא קריאת שמע של ערב? מהזמן שכהנים שהיו טמאים וטבלו רשאים לאכול תרומה, כלומר מצאת הכוכבים. עד מתי? יש כאן שלוש דעות: עד סוף המשמרת הראשונה של הלילה, עד חצות, או עד עלות השחר.</p>
-      <p class="sample rashi" style="font-family:var(--f-rashi);font-size:16px;background:var(--paper);padding:10px 12px;border-radius:6px">משעה שהכהנים נכנסים לאכול בתרומתן – כהנים שנטמאו וטבלו והעריב שמשן והגיע עתם לאכול בתרומה.</p>
-      <p class="source">למעלה: דוגמה לרש"י על המשנה, בכתב רש"י. רש"י מצטט קודם את המילים שהוא מפרש (דיבור המתחיל), ואחר כך מסביר.</p>
-    </div>
-    <div class="row"><span class="score" id="score">0 מתוך 7</span><button class="btn ghost" id="sugyaReset" type="button">להתחיל מחדש</button></div>
-    <div id="segs" style="display:grid;gap:12px"></div>
-    <p class="note"><b>הושווה למקור:</b> המשנה והגמרא הושוו מילה במילה לנוסח וילנא (ויקיטקסט) ולמהדורת ויליאם דוידסון ב<a href="https://www.sefaria.org/Berakhot.2a" target="_blank" rel="noopener">ספריא</a>, ורש"י לרש"י דפוס וילנא שם. הפיסוק (פסיקים, סימני שאלה) נוסף כאן לנוחות הקריאה ואינו חלק מהדפוס. התרגומים וההסברים הם שלי.</p>
-  </section>
-
-  <!-- 4. Words -->
+  <!-- WORDS -->
   <section class="panel" id="p-words" role="tabpanel" aria-labelledby="tab-words" hidden>
     <div>
-      <h2>מילון ארמית תלמודית</h2>
-      <p class="lede">המונחים שחוזרים כמעט בכל דף. התרגלו עם הכרטיסיות: לחצו על הכרטיס כדי לראות את הפירוש, וסמנו אם ידעתם.</p>
+      <h2>מילון הדף</h2>
+      <p class="lede">כל המילים בארמית שמסומנות בדף. כל כרטיס מראה את המילה כפי שהיא מופיעה בדף. לחצו על הכרטיס כדי לראות את הפירוש.</p>
     </div>
     <div class="progress"><span id="knownCount"></span><div class="bar"><i id="knownBar"></i></div></div>
     <button class="flash" id="flash" type="button" aria-live="polite"></button>
@@ -214,23 +206,162 @@ input[type=search]{width:100%;font:16px var(--f-body);padding:10px 12px;border-r
       <button class="btn no" id="fNo" type="button">עוד לא</button>
       <button class="btn yes" id="fYes" type="button">ידעתי</button>
     </div>
-    <div style="display:grid;gap:10px">
-      <h3>כל המונחים</h3>
-      <label for="q" class="source">חיפוש לפי מילה או פירוש</label>
-      <input type="search" id="q" placeholder="למשל: קושיא, מאי, ראיה">
-      <dl class="gloss" id="gloss"></dl>
+    <h3>כל המילים</h3>
+    <dl class="gloss" id="gloss"></dl>
+    <p class="note">פירוש שמסומן "שטיינזלץ" לקוח מהסוגריים בביאור שטיינזלץ לאותו קטע. פירוש שמסומן "הסבר הכלי" כתבתי בעצמי ולא בדקתי מול מקור.</p>
+  </section>
+
+  <!-- HOW -->
+  <section class="panel" id="p-how" role="tabpanel" aria-labelledby="tab-how" hidden>
+    <div class="two">
+      <div class="card">
+        <h3>מה יש על הדף</h3>
+        <p><b>משנה (מתני׳):</b> בעברית, ומסודרת בתחילת הסוגיה. בדף שלנו היא קטעים 1–5.</p>
+        <p><b>גמרא (גמ׳):</b> הדיון על המשנה, ברובו בארמית. בדף שלנו היא קטעים 6–14.</p>
+        <p><b>רש"י:</b> רבי שלמה יצחקי, צרפת, המאה ה־11. מסביר את הפשט. הוא מודפס בצד הפנימי של הדף, בכתב רש"י, ופותח כל הערה במילים מהגמרא שהוא מפרש ("דיבור המתחיל", מודגש בדף).</p>
+        <p><b>תוספות:</b> חכמי צרפת ואשכנז מהמאות ה־12 וה־13. משווים לסוגיות אחרות ומקשים, ולפעמים חולקים על רש"י. הם מודפסים בצד החיצוני של הדף. זה שלב למתקדמים.</p>
+        <p><b>שוליים:</b> בדף המודפס יש גם עין משפט, מסורת הש"ס, תורה אור והגהות. הם לא מופיעים כאן, ואפשר לראות אותם ב<a href="https://commons.wikimedia.org/wiki/File:Berakhot2a.jpg" target="_blank" rel="noopener">סריקה</a>.</p>
+      </div>
+      <div class="card">
+        <h3>שבעת השלבים</h3>
+        <ol class="steps">
+          <li><b>קריאה בקול.</b> בגמרא אין פיסוק, והקול עוזר לשמוע איפה נגמר כל משפט.</li>
+          <li><b>מילים.</b> מתרגמים כל מילה בארמית.</li>
+          <li><b>מהלך.</b> מזהים אם המשפט הוא שאלה, קושיא, תירוץ או ראיה.</li>
+          <li><b>רש"י.</b> קוראים את רש"י על הקטע.</li>
+          <li><b>ביאור.</b> בודקים את ההבנה שלכם מול הביאור.</li>
+          <li><b>סיכום.</b> כותבים את הקטע במילים שלכם.</li>
+          <li><b>חזרה.</b> למחרת קוראים שוב את הקטעים שסיימתם, לפני שממשיכים.</li>
+        </ol>
+      </div>
+    </div>
+    <h3>המהלכים של הסוגיה</h3>
+    <div class="moves" id="moves"></div>
+    <div class="card">
+      <h3>מקורות ורישיונות</h3>
+      <p class="muted" id="srcList"></p>
+      <p class="muted">חלוקת הדף לסוגיות, סיווג המהלכים, ההסברים הקצרים בתרגול וחלק מפירושי המילים כתבתי בעצמי. הם לא חלק מהמקורות, וכדאי לבדוק אותם מול רב או מורה.</p>
     </div>
   </section>
 </div>
 
-<script>
-(function(){
-  var store = {
-    get: function(k, d){ try{ var v = localStorage.getItem('gemara:'+k); return v ? JSON.parse(v) : d; }catch(e){ return d; } },
-    set: function(k, v){ try{ localStorage.setItem('gemara:'+k, JSON.stringify(v)); }catch(e){} }
-  };
+<div id="pop" hidden></div>
+<div id="sheet" hidden role="dialog" aria-label="פרטי הקטע"><div class="inner" id="sheetInner"></div></div>
 
-  /* Tabs */
+<script>
+var D = {"ref": "Berakhot.2a", "heRef": "ברכות ב׳ א", "segments": ["מתני׳ מאימתי קורין את שמע בערבין. משעה שהכהנים נכנסים לאכול בתרומתן עד סוף האשמורה הראשונה דברי רבי אליעזר.", "וחכמים אומרים עד חצות.", "רבן גמליאל אומר עד שיעלה עמוד השחר.", "מעשה ובאו בניו מבית המשתה אמרו לו לא קרינו את שמע אמר להם אם לא עלה עמוד השחר חייבין אתם לקרות ולא זו בלבד אמרו אלא כל מה שאמרו חכמים עד חצות מצותן עד שיעלה עמוד השחר", "הקטר חלבים ואברים מצותן עד שיעלה עמוד השחר וכל הנאכלים ליום אחד מצותן עד שיעלה עמוד השחר אם כן למה אמרו חכמים עד חצות כדי להרחיק אדם מן העבירה:", "גמ׳ תנא היכא קאי דקתני מאימתי", "ותו מאי שנא דתני בערבית ברישא לתני דשחרית ברישא", "תנא אקרא קאי דכתיב בשכבך ובקומך והכי קתני זמן קריאת שמע דשכיבה אימת משעה שהכהנים נכנסין לאכול בתרומתן", "ואי בעית אימא יליף מברייתו של עולם דכתיב ויהי ערב ויהי בקר יום אחד", "אי הכי סיפא דקתני בשחר מברך שתים לפניה ואחת לאחריה ובערב מברך שתים לפניה ושתים לאחריה לתני דערבית ברישא.", "תנא פתח בערבית והדר תני בשחרית עד דקאי בשחרית פריש מילי דשחרית והדר פריש מילי דערבית:", "אמר מר משעה שהכהנים נכנסים לאכול בתרומתן. מכדי כהנים אימת קא אכלי תרומה משעת צאת הכוכבים לתני משעת צאת הכוכבים.", "מלתא אגב אורחיה קמשמע לן כהנים אימת קא אכלי בתרומה משעת צאת הכוכבים והא קמשמע לן דכפרה לא מעכבא כדתניא ובא השמש וטהר ביאת שמשו מעכבתו מלאכול בתרומה ואין כפרתו מעכבתו מלאכול בתרומה.", "וממאי דהאי ובא השמש ביאת השמש והאי וטהר טהר יומא"], "rashi": [[["מאימתי קורין את שמע בערבין. משעה שהכהנים נכנסים לאכול בתרומתן", "כהנים שנטמאו וטבלו והעריב שמשן והגיע עתם לאכול בתרומה:"], ["עד סוף האשמורה הראשונה", "שליש הלילה כדמפרש בגמרא (דף ג.) ומשם ואילך עבר זמן דלא מקרי תו זמן שכיבה ולא קרינן ביה בשכבך ומקמי הכי נמי לאו זמן שכיבה לפיכך הקורא קודם לכן לא יצא ידי חובתו. אם כן למה קורין אותה בבית הכנסת כדי לעמוד בתפלה מתוך דברי תורה והכי תניא בבריי' בברכות ירושלמי. ולפיכך חובה עלינו לקרותה משתחשך. ובקריאת פרשה ראשונה שאדם קורא על מטתו יצא:"]], [], [["עד שיעלה עמוד השחר", "שכל הלילה קרוי זמן שכיבה:"]], [], [["הקטר חלבים ואברים", "של קרבנות שנזרק דמן ביום:"], ["מצותן", "להעלות כל הלילה ואינן נפסלים בלינה עד שיעלה עמוד השחר והן למטה מן המזבח דכתיב ולא ילין לבקר (שמות ל״ד:כ״ה):"], ["חלבים", "של כל קרבנות:"], ["אברים", "של עולה:"], ["וכל הנאכלים ליום אחד", "כגון חטאת ואשם וכבשי עצרת ומנחות ותודה:"], ["מצותן", "זמן אכילתן:"], ["עד שיעלה עמוד השחר", "והוא מביאן להיות נותר דכתיב בתודה לא יניח ממנו עד בקר (ויקרא ז׳:ט״ו) וכלם מתודה ילמדו:"], ["אם כן למה אמרו חכמים עד חצות", "בקריאת שמע ובאכילת קדשים:"], ["כדי להרחיק אדם מן העבירה", "ואסרום באכילה קודם זמנן כדי שלא יבא לאוכלן לאחר עמוד השחר ויתחייב כרת וכן בקריאת שמע לזרז את האדם שלא יאמר יש לי עוד שהות ובתוך כך יעלה עמוד השחר ועבר לו הזמן. והקטר חלבים דקתני הכא לא אמרו בו חכמים עד חצות כלל ולא נקט להו הכא אלא להודיע שכל דבר הנוהג בלילה כשר כל הלילה. והכי נמי תנן בפרק שני דמגילה (דף כ:) כל הלילה כשר לקצירת העומר ולהקטר חלבים ואברים:"]], [["היכא קאי", "מהיכא קא סליק דתנא ביה חובת קריאת שמע שהתחיל לשאול כאן זמן הקריאה:"]], [], [["אקרא קאי", "ושם למד חובת הקריאה:"]], [["ואי בעית אימא", "הא דתנא ערבין ברישא יליף מברייתו של עולם:"]], [], [["והדר תנא בשחרית", "מאימתי קורין את שמע בשחרית:"]], [["משעת צאת הכוכבים", "שהוא גמר ביאת השמש כדיליף לקמן (עמוד ב):"]], [], []], "tosafot": [[["מאימתי קורין וכו'", "פי' רש\"י ואנן היכי קרינן מבעוד יום ואין אנו ממתינין לצאת הכוכבים כדמפרש בגמרא על כן פירש רש\"י שקריאת שמע שעל המטה עיקר והוא לאחר צאת הכוכבים. והכי איתא בירושלמי אם קרא קודם לכן לא יצא ואם כן למה אנו מתפללין קריאת שמע בבית הכנסת כדי לעמוד בתפלה מתוך דברי תורה. תימא לפירושו והלא אין העולם רגילין לקרות סמוך לשכיבה אלא פרשה ראשונה (לקמן ברכות דף ס:) ואם כן שלש פרשיות היה לו לקרות. ועוד קשה דצריך לברך בקריאת שמע שתים לפניה ושתים לאחריה בערבית. ועוד דאותה קריאת שמע סמוך למטה אינה אלא בשביל המזיקין כדאמר בסמוך (דף ה.) ואם תלמיד חכם הוא אינו צריך. ועוד קשה דא״כ פסקינן כרבי יהושע בן לוי דאמר תפלות באמצע תקנום פ' באמצע בין שני קריאת שמע בין קריאת שמע של שחרית ובין קריאת שמע של ערבית. ואנן קיי״ל כר' יוחנן דאמר לקמן (ברכות דף ד:) איזהו בן העולם הבא זה הסומך גאולה של ערבית לתפלה. לכן פי' ר״ת דאדרבה קריאת שמע של בית הכנסת עיקר. ואם תאמר היאך אנו קורין כל כך מבעוד יום. ויש לומר דקיימא לן כרבי יהודה דאמר בפרק תפלת השחר (ברכות דף כו.) דזמן תפלת מנחה עד פלג המנחה דהיינו אחד עשר שעות פחות רביע ומיד כשיכלה זמן המנחה מתחיל זמן ערבית. ואם תאמר היאך אנו מתפללין תפלת מנחה סמוך לחשכה ואפילו לאחר פלג המנחה. יש לומר דקיימא לן כרבנן דאמרי זמן תפלת המנחה עד הערב ואמרינן לקמן (ברכות דף כז.) השתא דלא אתמר הלכתא לא כמר ולא כמר דעבד כמר עבד ודעבד כמר עבד. מכל מקום קשיא דהוי כתרי קולי דסתרן אהדדי שהרי מאיזה טעם אנו מתפללין ערבית מיד לאחר פלג המנחה משום דקיימא לן דשעת המנחה כלה כדברי רבי יהודה ומיד הוי זמן ערבית ובזמן התפלה עצמה לא קיימא לן כרבי יהודה אלא כרבנן. על כן אומר ר״י דודאי קריאת שמע של בית הכנסת עיקר ואנו שמתפללין ערבית מבעוד יום סבירא לן כהני תנאי דגמרא דאמרי משעה שקדש היום וגם משעה שבני אדם נכנסים להסב דהיינו סעודת ע״ש והיא היתה מבעוד יום ומאותה שעה הוי זמן תפלה. וגם ראיה (לקמן כז) דרב הוי מצלי של שבת בערב שבת ומסתמא גם היה קורא קריאת שמע. מכל אותן הראיות משמע דקריאת שמע של בית הכנסת היא עיקר. והא דקאמר בירושלמי למה היו קורין בבהכ״נ וכו' אומר ר״ת שהיו רגילין לקרות ק״ש קודם תפלתם כמו שאנו רגילין לומר אשרי תחלה ואותה ק״ש אינה אלא לעמוד בתפלה מתוך דברי תורה. ומכאן נראה מי שקורא ק״ש על מטתו שאין לברך וגם אינו צריך  לקרות אלא פרשה ראשונה:"]], [], [], [], [], [], [["ליתני דשחרית ברישא", "כדאשכחן בתמיד דכתיב של בקר תחלה:"]], [], [], [["אי הכי סיפא דקתני שחרית ברישא", "אי אמרת בשלמא דסמיך אקרא דבשכבך א\"כ אינו מקפיד קרא אלא אק\"ש. אלא א\"א דסמיך אקרא דברייתו של עולם א\"כ קפיד אכל מילי א\"כ סיפא דקתני וכו':"], ["מברך שתים לפניה וכו'", "(ירושלמי) ושבע ברכות הוי כנגד שבע ביום הללתיך (תהילים קי״ט:קס״ד) ולא קא חשיב יראו עינינו דההיא ברכה תקנו רבנן כדי להמתין לחבריהם בבית הכנסת. ודוקא בבית הכנסת שלהם שהיו עומדים בשדה והם מסוכנים מן המזיקים אבל בבתי כנסיות שלנו אין צריכין להמתין לחבריהם אלא בלילה:"]], [], [], [["והא קמ\"ל דכפרה לא מעכבא", "וא\"ת הא תנינא חדא זימנא במס' נגעים (פי\"ד) ומייתי לה בהערל (דף עד:) העריב שמשו אוכל בתרומה וי\"ל דרגילות של משניות לאשמועינן בקוצר אף למה שמפורש כבר:"]], []], "steinsaltz": ["<b class=\"sec\">א<\/b> ראשיתה של מסכת ברכות — ראשונה לכל המסכתות שבששת הסדרים — היא בענין קריאת שמע, שיש בה קבלת עול מלכות שמים וקבלת עול מצוות, והריהי משמשת איפוא כיסוד ושורש לכל הנשנה בעקבותיה. ופותחים בדיני זמן קריאת שמע: <b>מאימתי<\/b> (ממתי, מאיזו שעה) מתחיל הזמן בו <b>קורין<\/b> (קוראים) <b>את<\/b> קריאת <b>שמע בערבין<\/b> (בערבים)? <b>משעה שהכהנים<\/b> הטמאים (כגון מצורע או זב) שנטהרו <b>נכנסים לאכול בתרומתן.<\/b> ועד מתי הוא זמן קריאת שמע של ערבית? <b>עד סוף האשמורה הראשונה<\/b> של הלילה. שכך מובנה של המלה \"ובשכבך\" הנאמרת במצות קריאת שמע של ערבית (דברים ו, ז) — כאשר נפנה האדם לשכב על מיטתו על מנת לישון, וזמן הקריאה הריהו איפוא פרק הזמן בו אנשים מכינים את עצמם לשנת הלילה, והוא בחלקו הראשון של הלילה, אלו <b>דברי ר' אליעזר.<\/b>", "<b>וחכמים אומרים:<\/b> זמן קריאת שמע של ערבית הוא <b>עד חצות<\/b> הלילה.", "ואילו <b>רבן גמליאל אומר<\/b> כי מותר לקרות קריאת שמע של ערבית <b>עד שיעלה עמוד השחר,<\/b> שכן מובנה של המלה \"ובשכבך\" — כל זמן שבני אדם שוכבים בלילה על מיטתם, והרי זה איפוא כל הלילה כולו.", "ומסופר שכן אף נהג רבן גמליאל כהוראתו, שכך היה <b>מעשה ובאו<\/b> (שבו לביתם) <b>בניו<\/b> של רבן גמליאל בשעה מאוחרת בלילה <b>מבית המשתה<\/b> (מקום בו נערכה סעודת נישואין), <b>ואמרו לו:<\/b> עדיין <b>לא קרינו<\/b> (קראנו) <b>את<\/b> קריאת <b>שמע<\/b> של ערבית בשל טרדתנו בשמחת חתן וכלה, ופסק <b>להם<\/b> אביהם: <b>אם לא עלה<\/b> עדיין <b>עמוד השחר חייבין אתם לקרות.<\/b> ובהיות ודעת רבן גמליאל הינה דעת יחיד כנגד דעת שאר החכמים הסבורים כי זמן קריאת שמע הוא עד חצות, הטעים את הוראתו שכן היא גם לדעת חכמים, <b>ו<\/b>כי <b>לא<\/b> בהלכה <b>זו<\/b> (קריאת שמע) <b>בלבד אמרו, אלא<\/b> גם <b>כל מה שאמרו חכמים \"עד חצות\",<\/b> מעיקר הדין <b>מצותן עד שיעלה עמוד השחר.<\/b>", "ומביא רבן גמליאל כמה דוגמאות לעקרון זה, כגון: מצות <b>הקטר<\/b> (שריפת) <b>חלבים ואיברים<\/b> של הקרבנות על המזבח, אשר בשל ריבוי הקרבנות שהוקרבו לא הספיקו במהלך היום להעלות על המזבח את כל החלבים והאיברים, ועל כן המשיכו להקטירם כל הלילה, ככתוב \"זאת תורת העולה, היא העולה על מוקדה על המזבח כל הלילה עד הבוקר ואש המזבח תוקד בו\" (ויקרא ו, ב), <b>ו<\/b>כן <b>כל הנאכלים ליום אחד,<\/b> אותם קרבנות, כמו החטאת והאשם, שמותר לאכלם רק ביום שחיטתם ובלילה שלאחריו, אף שאמרו חכמים שהם נאכלים \"ליום ולילה עד חצות\" מדין התורה <b>מצותן עד שיעלה עמוד השחר,<\/b> אבל לא מאוחר יותר, ככתוב \"ביום קרבנו יאכל לא יניח ממנו עד בקר\" (ויקרא ז, טו). <b>אם כן, למה אמרו חכמים<\/b> שזמנם <b>\"עד חצות\"<\/b> — <b>כדי להרחיק<\/b> את ה<b>אדם מן העבירה,<\/b> שאם יתירו מתחילה לעשות את המצוה עד עלות השחר, עלול אדם להתרשל ולדחותה, עד אשר יעבור זמנה של המצוה.", "<b class=\"sec\">ב גמרא<\/b> המשנה פתחה בדיני קריאת שמע בשאלה מאימתי קוראים את קריאת שמע של ערבית, ושואלים על כך: ה<b>תנא<\/b> של משנתנו <b>היכא קאי דקתני<\/b> <small>[היכן הוא עומד<\/small> בהסתמך על אלו דברים קודמים הוא ממשיך, בזה <small>ש<\/small>הוא <small>שונה]<\/small> <b>\"מאימתי\"?<\/b> שמסגנון זה נראה כאילו כבר שנה קודם למשנתנו זו את עיקר ההלכה של חובת קריאת שמע בערבית, ומעתה הוא ממשיך ומפרט אותה. והרי משנתנו הינה המשנה הראשונה בששת סדרי המשנה?", "<b>ותו<\/b> <small>[ועוד]<\/small> שאלה: <b>מאי שנא דתני<\/b> <small>[מה שונה,<\/small> מדוע שינה התנא מן הסדר, בכך <small>ש<\/small>הוא <small>שונה,<\/small> עוסק<small>]<\/small> כאן <b>ב<\/b>נושא של קריאת שמע של <b>ערבית ברישא<\/b> <small>[בתחילה]?<\/small> <b>לתני<\/b> <small>[שישנה]<\/small> את דינה של קריאת שמע של <b>שחרית ברישא<\/b> <small>[בתחילה]!<\/small> שהרי רוב המצוות נוהגות ביום, ואף בקרבנות מוקדם קרבן השחר לקרבן הערב (תוהרא\"ש).", "על שתי השאלות הללו באה תשובה אחת: ה<b>תנא אקרא קאי, דכתיב<\/b> <small>[על הכתוב עומד,<\/small> נסמך<small>, ש<\/small>כך <small>נאמר]:<\/small> \"ודברת בם בשבתך בביתך ובלכתך בדרך ו<b>בשכבך ובקומך\"<\/b> (דברים ו, ז), שבאמצעות סגנון זה, מלמדנו התנא כי ההלכות שבתורה שבעל פה הריהן נסמכות על האמור בתורה שבכתב. <b>ו<\/b>מתוך שנסמכו דברי המשנה על כתוב זה, <b>הכי קתני<\/b> <small>[כך שנינו],<\/small> שכך יש לשנות במשנה: <b>זמן קריאת שמע<\/b> של <b>שכיבה<\/b> שנצטווינו עליה בתורה <b>אימת<\/b> <small>[מתי]<\/small> הוא? — <b>משעה שהכהנים נכנסין לאכול בתרומתן.<\/b> ומובן, כי בשל ההסתמכות על המקרא, גם המשנה מתחילה לבאר קודם מהו \"בשכבך\".", "<b>ו<\/b>באשר לשאלה מדוע הקדימה המשנה את קריאת שמע של ערבית לקריאת שמע של שחרית, <b>אי בעית אימא<\/b> <small>[אם תרצה אמור]<\/small> הסבר אחר: <b>יליף<\/b> <small>[למד]<\/small> התנא סדר זה <b>מברייתו<\/b> (בריאתו) <b>של עולם, דכתיב<\/b> <small>[ש<\/small>כן <small>נאמר]<\/small> במעשה בראשית: <b>\"ויהי ערב ויהי בקר יום אחד\"<\/b> (בראשית א, ה), והרי שהיום מתחיל מן הערב ולא מן הבוקר. ומטעמים אלה ראוי לפתוח תחילה בהלכות קריאת שמע הנוהגת בערב.", "ושואלים: <b>אי הכי<\/b> <small>[אם כך],<\/small> ב<b>סיפא דקתני<\/b> <small>[<\/small>ב<small>סוף<\/small> המשנה <small>ששנינו]<\/small> בהמשך הפרק <b>\"בשחר מברך שתים,<\/b> שתי ברכות, <b>לפניה,<\/b> לפני קריאת שמע, <b>ואחת לאחריה, ובערב מברך שתים לפניה ושתים לאחריה\", ו<\/b>הלא לפי האמור נכון היה <b>לתני<\/b> <small>[שישנה]<\/small> של <b>ערבית ברישא<\/b> <small>[בתחילה]!<\/small>", "ועונים: אכן, ה<b>תנא פתח<\/b> דבריו <b>ב<\/b>הלכות הנוגעות ל<b>ערבית, והדר תני<\/b> <small>וחזר<\/small> ו<small>שנה]<\/small> אחר כך <b>ב<\/b>הלכות <b>שחרית,<\/b> ו<b>עד<\/b> (מתוך) <b>דקאי<\/b> <small>[ש<\/small>הוא <small>עומד,<\/small> נמצא<small>]<\/small> <b>בשחרית, פריש מילי<\/b> <small>[פירש<\/small> כל <small>עניני]<\/small> <b>שחרית, והדר פריש מילי<\/b> <small>[וחזר<\/small> אחר כך ו<small>פירש עניני]<\/small> <b>ערבית.<\/b>", "<b class=\"sec\">ג<\/b> מעתה נפנים לברר את המשך הדברים במשנה. <b>אמר מר<\/b> <small>[החכם]<\/small> במשנה שזמן תחילת קריאת שמע הוא <b>משעה שהכהנים<\/b> הטמאים שנטהרו <b>נכנסים לאכול בתרומתן.<\/b> ואולם, שעה זו שבה הכהנים נכנסים לאכול בתרומתן איננה ציון זמן מוגדר כשלעצמו, ו<b>מכדי<\/b> <small>[הרי]<\/small> ה<b>כהנים אימת קא אכלי<\/b> <small>[מתי הם אוכלים]<\/small> <b>תרומה?<\/b> — <b>משעת צאת הכוכבים,<\/b> ואם כן <b>לתני<\/b> <small>[שישנה]<\/small> במפורש: <b>\"משעת צאת הכוכבים\"!<\/b>", "ומשיבים: אכן, לקביעת זמן קריאת שמע פשוט היה יותר לומר שהוא זמן צאת הכוכבים, ואולם על ידי סגנון זה <b>מלתא אגב אורחיה קמשמע לן<\/b> <small>[דבר<\/small> נוסף <small>השמיע לנו בדרך אגב]<\/small> — <b>כהנים אימת קא אכלי<\/b> <small>[מתי הם אוכלים]<\/small> <b>בתרומה<\/b> — <b>משעת צאת הכוכבים. והא קמשמע לן<\/b> <small>[ו<\/small>דבר <small>זה השמיע לנו]<\/small> אגב כך חידוש הלכה ש<b>כפרה לא מעכבא<\/b> <small>[אינה מעכבת],<\/small> שאף שכבר טבל הכהן לטהרתו, מכל מקום חייב הוא עדיין להביא קרבן מיוחד לכפרה, וכל עוד לא הביאו עדיין לא הגיע איפוא לטהרה שלימה, ואף על פי כן מותר לו כבר לאכול בתרומה. חידוש זה המובא במשנתנו בדרך אגב, מתפרש בברייתא בשלמותו, כשהוא נדרש מלשון הכתוב. <b>כדתניא<\/b> <small>[כפי ששנינו<\/small> בברייתא<small>]:<\/small> נאמר בדיני טומאה \"נפש אשר תגע בו וטמאה עד הערב, ולא יאכל מן הקדשים כי אם רחץ בשרו במים. ובא השמש וטהר ואחר יאכל מן הקדשים כי לחמו הוא\" (ויקרא כב, ו), ויש ללמוד מן האמור <b>\"ובא השמש וטהר\"<\/b> שדווקא <b>ביאת<\/b> (שקיעת) <b>שמשו<\/b> היא ה<b>מעכבתו מלאכול בתרומה, ואין כפרתו<\/b> (הבאת הקרבנות המכפרים) <b>מעכבתו מלאכול בתרומה.<\/b>", "<b class=\"sec\">ד<\/b> ודנים בראיה המובאת בברייתא: <b>ממאי<\/b> <small>[ממה,<\/small> מנין<small>],<\/small> ש<b>האי<\/b> <small>[זה]<\/small> הכתוב <b>\"ובא השמש\"<\/b> פירושו <b>ביאת השמש,<\/b> שהיא שקיעתה המלאה, ולכן <b>\"וטהר\"<\/b> יהא משמעו <b>טהר יומא<\/b> <small>[נטהר,<\/small> הושלם <small>היום],<\/small> שיבוא השמש, ויהא האויר נקי, ויראו הכוכבים (רה\"ג), והמילים \"ובא השמש וטהר\" הן ביטוי אחד שמשמעו שקיעתה המלאה של השמש."], "sources": {"gemara": ["Wikisource Talmud Bavli", "CC-BY-NC"], "rashi": ["Vilna Edition", "Public Domain"], "tosafot": ["Vilna Edition", "Public Domain"], "steinsaltz": ["William Davidson Edition - Hebrew", "CC-BY-NC"]}};
+(function(){
+  var N = D.segments.length;
+  var store = {
+    get: function(k, d){ try{ var v = localStorage.getItem('daf:'+D.ref+':'+k); return v ? JSON.parse(v) : d; }catch(e){ return d; } },
+    set: function(k, v){ try{ localStorage.setItem('daf:'+D.ref+':'+k, JSON.stringify(v)); }catch(e){} }
+  };
+  function esc(s){ return String(s).replace(/[&<>"]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+
+  /* ---- teaching layer (written for this daf) ---- */
+  var SECTIONS = [
+    {t:'המשנה', from:0, to:4},
+    {t:'סוגיה א: למה "מאימתי" ולמה ערבית קודם', from:5, to:10},
+    {t:'סוגיה ב: למה לא "צאת הכוכבים"', from:11, to:13, more:'הדיון ממשיך בעמוד ב.'}
+  ];
+  var ROLES = ['שאלה','קושיא','תירוץ','תירוץ נוסף','ראיה'];
+  var META = [
+    {label:'דעה א: רבי אליעזר', task:'עד מתי אפשר לקרוא לפי רבי אליעזר?'},
+    {label:'דעה ב: חכמים', task:'עד מתי לפי חכמים?'},
+    {label:'דעה ג: רבן גמליאל', task:'עד מתי לפי רבן גמליאל?'},
+    {label:'מעשה', task:'מה עשה רבן גמליאל, ומה זה מלמד על שיטתו?'},
+    {label:'המשך המשנה: הכלל', task:'למה, לפי המשנה, אמרו חכמים "עד חצות"?'},
+    {r:'קושיא', why:'הגמרא מקשה: המשנה שואלת "מאימתי" כאילו כבר ידוע שיש חובה לקרוא שמע. איפה זה נאמר?'},
+    {r:'קושיא', why:'"ותו" = ועוד. זו קושיא שנייה על סדר המשנה.'},
+    {r:'תירוץ', why:'תשובה לשתי הקושיות: המשנה נסמכת על הפסוק, ובפסוק "בשכבך" בא לפני "ובקומך".'},
+    {r:'תירוץ נוסף', why:'"ואי בעית אימא" פותח תשובה אחרת לקושיא השנייה.'},
+    {r:'קושיא', why:'"אי הכי" = אם כך. זו קושיא על התירוץ, מהמשך המשנה שבו שחרית בא קודם.'},
+    {r:'תירוץ', why:'התנא פתח בערבית, ואחר כך כשעסק בשחרית השלים את כל דיני שחרית.'},
+    {r:'קושיא', why:'"מכדי... לתני" = הרי... שישנה! למה לא כתוב פשוט "צאת הכוכבים"?'},
+    {r:'תירוץ', why:'המשנה השמיעה דבר נוסף בדרך אגב. הגמרא מביאה ברייתא ("כדתניא") כראיה לחידוש הזה.'},
+    {r:'שאלה', why:'"וממאי" = ומנין? הגמרא שואלת על הפירוש של הפסוק שהובא בברייתא. התשובה בעמוד ב.'}
+  ];
+  var GLOSS = [
+    {k:'מתני׳', m:'מתניתין, כלומר המשנה שלנו', s:0},
+    {k:'גמ׳', m:'גמרא', s:0},
+    {k:'תנא', m:'התנא, חכם המשנה', s:1},
+    {k:'היכא קאי', m:'היכן הוא עומד? (על מה הוא נסמך)', s:1},
+    {k:'דקתני', m:'בזה שהוא שונה', s:1},
+    {k:'ותו', m:'ועוד', s:1},
+    {k:'מאי שנא', m:'מה שונה? מדוע?', s:1},
+    {k:'דתני', f:['דתני','תני'], m:'ששונה, שונה', s:0},
+    {k:'ברישא', m:'בתחילה', s:1},
+    {k:'לתני', m:'שישנה', s:1},
+    {k:'אקרא קאי', m:'על הכתוב עומד, נסמך על הפסוק', s:1},
+    {k:'דכתיב', f:['דכתיב','כדכתיב'], m:'שכך נאמר', s:1},
+    {k:'והכי קתני', m:'וכך שנינו', s:1},
+    {k:'דשכיבה', m:'של שכיבה', s:0},
+    {k:'אימת', m:'מתי', s:1},
+    {k:'ואי בעית אימא', m:'ואם תרצה אמור', s:1},
+    {k:'יליף', m:'למד', s:1},
+    {k:'אי הכי', m:'אם כך', s:1},
+    {k:'סיפא', m:'סוף המשנה', s:1},
+    {k:'והדר', m:'וחזר, ואחר כך', s:1},
+    {k:'דקאי', m:'שהוא עומד', s:1},
+    {k:'פריש', m:'פירש', s:1},
+    {k:'מילי', m:'עניינים, דברים', s:1},
+    {k:'אמר מר', m:'אמר החכם (ציטוט מהמשנה לפני שדנים בו)', s:1},
+    {k:'מכדי', m:'הרי', s:1},
+    {k:'קא אכלי', m:'אוכלים', s:1},
+    {k:'מלתא אגב אורחיה', m:'דבר אגב דרכו', s:1},
+    {k:'קמשמע לן', m:'השמיע לנו', s:1},
+    {k:'והא', m:'וזה', s:1},
+    {k:'לא מעכבא', m:'אינה מעכבת', s:1},
+    {k:'כדתניא', m:'כפי ששנינו (בברייתא)', s:1},
+    {k:'וממאי', f:['וממאי','ממאי'], m:'וממה? ומנין?', s:1},
+    {k:'דהאי', f:['דהאי','והאי','האי'], m:'שזה, וזה', s:1},
+    {k:'טהר יומא', m:'נטהר היום (הושלם היום)', s:1}
+  ];
+
+  /* tokenizer + glossary matcher */
+  var FORMS = {};
+  GLOSS.forEach(function(g, i){ (g.f || [g.k]).forEach(function(f){ FORMS[f] = i; }); });
+  function norm(t){ return t.replace(/[.,:;?!"״]/g, ''); }
+  function tokens(i){ return D.segments[i].split(/\s+/).filter(Boolean); }
+  function matchSeg(i){
+    var tk = tokens(i), out = [], j = 0;
+    while (j < tk.length){
+      var hit = null;
+      for (var L = 4; L >= 1; L--){
+        if (j + L > tk.length) continue;
+        var ph = tk.slice(j, j+L).map(norm).join(' ');
+        if (FORMS.hasOwnProperty(ph)){ hit = {g:FORMS[ph], L:L}; break; }
+      }
+      if (hit){ out.push({t:tk.slice(j, j+hit.L).join(' '), g:hit.g}); j += hit.L; }
+      else { out.push({t:tk[j]}); j++; }
+    }
+    return out;
+  }
+  var MATCH = []; for (var i = 0; i < N; i++) MATCH.push(matchSeg(i));
+  function segHTML(i){
+    return MATCH[i].map(function(p, k){
+      var t = esc(p.t);
+      if (k === 0 && /^(מתני׳|גמ׳)$/.test(p.t)) return '<span class="open w" data-g="'+p.g+'" tabindex="0">'+t+'</span>';
+      return p.g != null ? '<span class="w" data-g="'+p.g+'" tabindex="0">'+t+'</span>' : t;
+    }).join(' ');
+  }
+  function segWords(i){
+    var seen = {}, out = [];
+    MATCH[i].forEach(function(p){ if (p.g != null && !seen[p.g]){ seen[p.g] = 1; out.push(p.g); } });
+    return out;
+  }
+  function sectionOf(i){ for (var s = 0; s < SECTIONS.length; s++) if (i >= SECTIONS[s].from && i <= SECTIONS[s].to) return s; return 0; }
+  function commHTML(list, seg, cls){
+    return list.map(function(c){ return '<p data-seg="'+seg+'"'+(cls?' class="'+cls+'"':'')+'>'+(c[0]?'<span class="dh">'+esc(c[0])+'</span> – ':'')+esc(c[1])+'</p>'; }).join('');
+  }
+
+  /* state */
+  var done = store.get('done', []);
+  var answers = store.get('answers', {});
+  var notes = store.get('notes', {});
+  var cur = Math.min(store.get('cur', 0), N-1);
+
+  /* tabs */
   var tabs = document.querySelectorAll('[role=tab]');
   function showTab(id){
     tabs.forEach(function(t){
@@ -238,211 +369,201 @@ input[type=search]{width:100%;font:16px var(--f-body);padding:10px 12px;border-r
       t.setAttribute('aria-selected', on);
       document.getElementById(t.getAttribute('aria-controls')).hidden = !on;
     });
-    store.set('tab', id);
+    hidePop(); closeSheet();
+    try{ localStorage.setItem('daf:tab', id); }catch(e){}
   }
   tabs.forEach(function(t){ t.addEventListener('click', function(){ showTab(t.id); window.scrollTo({top:0}); }); });
-  var hashMap = {daf:'tab-daf', method:'tab-method', sugya:'tab-sugya', words:'tab-words'};
-  var startTab = hashMap[location.hash.slice(1)] || store.get('tab', 'tab-daf');
-  if (document.getElementById(startTab)) showTab(startTab);
 
-  /* 1. Daf */
-  var REG = {
-    head: {t:'הכותרת', d:'בראש הדף: שם המסכת, שם הפרק ומספר הפרק. מספר הדף מופיע באותיות (ב, ג, ד...). לכל דף יש שני צדדים: עמוד א (ע"א) ועמוד ב (ע"ב). מראה מקום נכתב כך: ברכות ב ע"א.'},
-    gemara: {t:'המשנה והגמרא, במרכז', d:'זה הטקסט העיקרי. המשנה (בעברית, נחתמה בסביבות שנת 200 לספירה) מסומנת בתחילתה במילה "מתני׳". אחריה באה הגמרא (בעיקר בארמית), שמתחילה במילה "גמ׳" ודנה במשנה. המילים הראשונות של כל קטע כתובות באותיות גדולות.', s:'גמ׳ תנא היכא קאי דקתני מאימתי?'},
-    rashi: {t:'רש"י, בצד הפנימי', d:'פירושו של רבי שלמה יצחקי (צרפת, המאה ה־11). הוא מסביר את הפשט מילה אחר מילה, ומודפס בצד הקרוב לכריכה, בכתב מיוחד שנקרא "כתב רש"י". בלימוד מתחילים תמיד ממנו.', s:'כהנים שנטמאו וטבלו והעריב שמשן', rashi:true},
-    tosafot: {t:'תוספות, בצד החיצוני', d:'אוסף דיונים של חכמי צרפת ואשכנז מהמאות ה־12 וה־13, רבים מהם מצאצאי רש"י ותלמידיו. הם משווים לסוגיות אחרות בש"ס, מקשים ומיישבים, ולפעמים חולקים על רש"י. זה שלב למתקדמים.', rashi:true, s:'ואם תאמר...'},
-    margin: {t:'השוליים', d:'עין משפט נר מצוה: איפה הדין נפסק (רמב"ם, טור, שולחן ערוך). מסורת הש"ס: מקומות אחרים בתלמוד שבהם מופיע אותו עניין. תורה אור: מראה מקום לפסוקים. הגהות (למשל הגהות הב"ח): תיקוני נוסח. אלה כלים לבירור ולהעמקה, לא חלק מהקריאה הראשונה.'}
-  };
-  var dafInfo = document.getElementById('dafInfo');
-  function showRegion(r){
-    document.querySelectorAll('.region').forEach(function(b){ b.setAttribute('aria-pressed', b.dataset.r === r); });
-    var x = REG[r];
-    dafInfo.innerHTML = '<h3>'+x.t+'</h3><p style="margin-top:6px">'+x.d+'</p>' + (x.s ? '<p class="sample'+(x.rashi?' rashi':'')+'">'+x.s+'</p>' : '');
+  /* ---- DAF ---- */
+  var colG = document.getElementById('colGemara'), colR = document.getElementById('colRashi'), colT = document.getElementById('colTos');
+  function renderDaf(){
+    var h = '<span class="blk">', r = '', t = '';
+    for (var i = 0; i < N; i++){
+      if (i === 5) h += '</span><span class="blk">';
+      h += '<span class="seg'+(done.indexOf(i)>-1?' done':'')+'" data-i="'+i+'" tabindex="0" role="button" aria-label="קטע '+(i+1)+'">'+segHTML(i)+'</span> ';
+      r += commHTML(D.rashi[i], i); t += commHTML(D.tosafot[i], i);
+    }
+    colG.innerHTML = h + '</span>';
+    colR.innerHTML = r || '<p class="cempty">אין</p>';
+    colT.innerHTML = t || '<p class="cempty">אין</p>';
+    var k = done.length;
+    document.getElementById('dafProg').textContent = 'למדת ' + k + ' מתוך ' + N + ' קטעים';
+    document.getElementById('dafBar').style.width = (k / N * 100) + '%';
   }
-  document.querySelectorAll('.region').forEach(function(b){ b.addEventListener('click', function(){ showRegion(b.dataset.r); }); });
-  showRegion('gemara');
-
-  /* 2. Steps */
-  var STEPS = [
-    ['קריאה בקול', 'קוראים את הקטע בקול, לאט. הקול עוזר לחלק את המשפטים, שהרי בגמרא אין פיסוק.'],
-    ['פיסוק', 'מסמנים בעיפרון איפה נגמר כל משפט ואיפה יש סימן שאלה. "מאי", "היכי", "אמאי" ו"מי" פותחות בדרך כלל שאלה.'],
-    ['תרגום מילה במילה', 'מתרגמים כל מילה לעברית. מילה לא מוכרת מחפשים במילון (בלשונית 4).'],
-    ['זיהוי המהלכים', 'מסמנים ליד כל משפט מה הוא: שאלה, קושיא, תירוץ, ראיה או דחייה. מי אמר אותו? ועל מה הוא מגיב?'],
-    ['רש"י', 'קוראים את רש"י על הקטע ובודקים: האם הבנתי כמוהו? מה הוא מוסיף?'],
-    ['סיכום בעל פה', 'מספרים את הסוגיה במילים שלכם, בלי להסתכל: מה הייתה השאלה, מה התשובה ומה המסקנה.'],
-    ['חזרה', 'למחרת קוראים את הקטע שוב לפני שממשיכים. חזרה קבועה היא מה שמקבע את הלימוד.']
-  ];
-  var stepsEl = document.getElementById('steps');
-  var doneSteps = store.get('steps', []);
-  function renderSteps(){
-    stepsEl.innerHTML = '';
-    STEPS.forEach(function(s, i){
-      var li = document.createElement('li');
-      var d = doneSteps.indexOf(i) > -1;
-      if (d) li.className = 'done';
-      li.innerHTML = '<div class="s-body"><h3>'+s[0]+'</h3><small>'+s[1]+'</small></div>';
-      var c = document.createElement('button');
-      c.className = 'check'; c.type = 'button'; c.id = 'step-'+i;
-      c.setAttribute('aria-label', (d?'בטל סימון: ':'סמן כבוצע: ')+s[0]);
-      c.textContent = d ? '✓' : '';
-      c.addEventListener('click', function(){
-        var k = doneSteps.indexOf(i);
-        if (k > -1) doneSteps.splice(k,1); else doneSteps.push(i);
-        store.set('steps', doneSteps); renderSteps();
-      });
-      li.appendChild(c);
-      stepsEl.appendChild(li);
-    });
-    document.getElementById('stepCount').textContent = doneSteps.length + ' / ' + STEPS.length;
-    document.getElementById('stepBar').style.width = (doneSteps.length / STEPS.length * 100) + '%';
+  function selectSeg(i){
+    document.querySelectorAll('.seg.sel, .ctext p.sel').forEach(function(e){ e.classList.remove('sel'); });
+    if (i == null) return;
+    document.querySelectorAll('.seg[data-i="'+i+'"], .ctext p[data-seg="'+i+'"]').forEach(function(e){ e.classList.add('sel'); });
   }
-  document.getElementById('stepReset').addEventListener('click', function(){ doneSteps = []; store.set('steps', doneSteps); renderSteps(); });
-  renderSteps();
 
-  var MOVES = [
-    ['שאלה', 'בקשה להבין: מה המקור? מה המקרה? ("מאי", "היכי דמי", "מנא הני מילי")'],
-    ['קושיא', 'הצבעה על בעיה: סתירה, דבר מיותר או חוסר הגיון ("והא", "ליתני", "פשיטא")'],
-    ['תירוץ', 'תשובה שמיישבת את הקושיא, לרוב בהבחנה חדשה ("הכא במאי עסקינן", "לא קשיא")'],
-    ['ראיה', 'הבאת מקור שתומך או מכריע ("תא שמע", "דתניא", "דכתיב")'],
-    ['דחייה', 'הסבר למה הראיה או ההצעה לא מוכיחות ("דילמא", "לא, ...", "אלא")'],
-    ['מסקנה', 'סוף הדיון: "שמע מינה" (הוכח), "תיובתא" (הדעה הופרכה), "תיקו" (נשאר ללא הכרעה)']
-  ];
-  document.getElementById('moves').innerHTML = MOVES.map(function(m){ return '<div class="move"><b>'+m[0]+'</b><span>'+m[1]+'</span></div>'; }).join('');
+  /* word popover */
+  var pop = document.getElementById('pop');
+  function showPop(el){
+    var g = GLOSS[+el.dataset.g];
+    pop.innerHTML = '<b>'+esc(g.k)+'</b> = '+esc(g.m)+'<small>'+(g.s?'פירוש: שטיינזלץ':'פירוש: הסבר הכלי')+'</small>';
+    pop.hidden = false;
+    var r = el.getBoundingClientRect(), pw = pop.offsetWidth, vw = document.documentElement.clientWidth;
+    var left = Math.min(Math.max(8, r.left + r.width/2 - pw/2 + window.scrollX), vw - pw - 8 + window.scrollX);
+    pop.style.left = left + 'px';
+    pop.style.top = (r.bottom + window.scrollY + 6) + 'px';
+  }
+  function hidePop(){ pop.hidden = true; }
 
-  /* 3. Sugya */
-  var ROLES = ['שאלה','קושיא','תירוץ','תירוץ נוסף','פירוש'];
-  var SEGS = [
-    {a:'גמ׳ תנא היכא קאי דקתני מאימתי?', r:'קושיא', tr:'התנא, על מה הוא נסמך כשהוא שונה "מאימתי"?', ex:'המשנה שואלת "מאיזו שעה" כאילו כבר ידוע שיש חובה לקרוא שמע. הגמרא שואלת: איפה נאמרה החובה הזו?'},
-    {a:'ותו, מאי שנא דתני בערבית ברישא? לתני דשחרית ברישא!', r:'קושיא', tr:'ועוד: למה שנה קודם את קריאת שמע של ערב? שישנה קודם את של שחרית!', ex:'"ותו" = ועוד, כלומר קושיא שנייה. "לתני" (או "ליתני") = שישנה. ההיגיון הוא שהיום מתחיל בבוקר.'},
-    {a:'תנא אקרא קאי, דכתיב: "בשכבך ובקומך".', r:'תירוץ', tr:'התנא נסמך על פסוק, שכתוב: "בשכבך ובקומך".', ex:'תשובה אחת לשתי הקושיות. מקור החובה הוא הפסוק בקריאת שמע (דברים ו, ז), ובפסוק השכיבה (ערב) באה לפני הקימה (בוקר).'},
-    {a:'והכי קתני: זמן קריאת שמע דשכיבה אימת? משעה שהכהנים נכנסין לאכול בתרומתן.', r:'פירוש', tr:'וכך הוא שונה: זמן קריאת שמע של שכיבה, מתי? משעה שהכהנים נכנסים לאכול בתרומתן.', ex:'"והכי קתני" = כך יש לקרוא את המשנה. הגמרא מנסחת מחדש את השאלה של המשנה לאור הפסוק.'},
-    {a:'ואי בעית אימא: יליף מברייתו של עולם, דכתיב: "ויהי ערב ויהי בקר יום אחד".', r:'תירוץ נוסף', tr:'ואם תרצה, אמור: הוא לומד מבריאת העולם, שכתוב "ויהי ערב ויהי בקר יום אחד".', ex:'"ואי בעית אימא" פותח תשובה חלופית לקושיא השנייה: גם בבריאה הערב קודם לבוקר.'},
-    {a:'אי הכי, סיפא דקתני: בשחר מברך שתים לפניה ואחת לאחריה, ובערב מברך שתים לפניה ושתים לאחריה — לתני דערבית ברישא!', r:'קושיא', tr:'אם כך, בסוף (המשנה) ששנה "בשחר מברך שתיים לפניה ואחת לאחריה, ובערב...": שישנה את של ערבית קודם!', ex:'"אי הכי" = אם כך. זו קושיא על התירוץ: אם הערב קודם, למה במשנה מאוחרת יותר (ברכות א, ד) הבוקר מופיע קודם?'},
-    {a:'תנא פתח בערבית, והדר תני בשחרית. עד דקאי בשחרית, פריש מילי דשחרית, והדר פריש מילי דערבית.', r:'תירוץ', tr:'התנא פתח בערבית ואחר כך שנה שחרית. כשכבר עסק בשחרית, פירש את דיני שחרית, ואחר כך חזר לפרש את דיני ערבית.', ex:'הסדר נשמר: המסכת פותחת בערב. אחר כך, כשהמשנה הגיעה לשחרית, היא השלימה את כל דיני הבוקר לפני שחזרה לערב.'}
-  ];
-  var answers = store.get('sugya', {});
-  var segsEl = document.getElementById('segs');
-  function renderSegs(){
-    segsEl.innerHTML = '';
-    var correct = 0;
-    SEGS.forEach(function(s, i){
+  /* sheet */
+  var sheet = document.getElementById('sheet'), sheetInner = document.getElementById('sheetInner');
+  function openSheet(i){
+    hidePop();
+    selectSeg(i);
+    var m = META[i], sec = SECTIONS[sectionOf(i)];
+    var words = segWords(i).map(function(g){ return '<span><b>'+esc(GLOSS[g].k)+'</b> = '+esc(GLOSS[g].m)+'</span>'; }).join('');
+    sheetInner.innerHTML =
+      '<div class="grab"><div><span class="chip">קטע '+(i+1)+' מתוך '+N+'</span> <span class="chip gold">'+esc(m.r || m.label)+'</span></div><button class="x" type="button" id="sheetX" aria-label="סגירה">✕</button></div>'+
+      '<p class="muted" style="font-size:14px">'+esc(sec.t)+'</p>'+
+      '<p class="sgtext">'+segHTML(i)+'</p>'+
+      (words ? '<div class="words">'+words+'</div>' : '')+
+      '<details open><summary>רש"י ('+D.rashi[i].length+')</summary><div class="ctext">'+(commHTML(D.rashi[i], i) || '<p class="cempty">אין רש"י על הקטע הזה.</p>')+'</div></details>'+
+      '<details><summary>ביאור שטיינזלץ</summary><div class="stz">'+(D.steinsaltz[i] || '')+'</div></details>'+
+      (D.tosafot[i].length ? '<details><summary>תוספות ('+D.tosafot[i].length+'), למתקדמים</summary><div class="ctext">'+commHTML(D.tosafot[i], i)+'</div></details>' : '')+
+      '<button class="btn" type="button" id="sheetLearn">ללמוד את הקטע הזה במצב מודרך</button>';
+    sheet.hidden = false;
+    sheet.scrollTop = 0;
+    document.getElementById('sheetX').onclick = function(){ closeSheet(); };
+    document.getElementById('sheetLearn').onclick = function(){ cur = i; store.set('cur', cur); renderGuide(); showTab('tab-learn'); window.scrollTo({top:0}); };
+  }
+  function closeSheet(){ sheet.hidden = true; selectSeg(null); }
+
+  document.addEventListener('click', function(e){
+    var w = e.target.closest('.w');
+    if (w){ showPop(w); return; }
+    if (!e.target.closest('#pop')) hidePop();
+    var s = e.target.closest('.seg');
+    if (s){ openSheet(+s.dataset.i); return; }
+    var c = e.target.closest('#daf .ctext p[data-seg]');
+    if (c){ openSheet(+c.dataset.seg); }
+  });
+  document.addEventListener('keydown', function(e){
+    if (e.key === 'Escape'){ hidePop(); closeSheet(); }
+    if ((e.key === 'Enter' || e.key === ' ') && e.target.classList){
+      if (e.target.classList.contains('w')){ e.preventDefault(); showPop(e.target); }
+      else if (e.target.classList.contains('seg')){ e.preventDefault(); openSheet(+e.target.dataset.i); }
+    }
+  });
+
+  /* ---- GUIDED ---- */
+  var guide = document.getElementById('guide');
+  function markDone(i, on){
+    var k = done.indexOf(i);
+    if (on && k === -1) done.push(i);
+    if (!on && k > -1) done.splice(k, 1);
+    store.set('done', done);
+  }
+  function renderNav(){
+    var cs = sectionOf(cur);
+    document.getElementById('secBtns').innerHTML = SECTIONS.map(function(s, k){
+      var n = 0; for (var i = s.from; i <= s.to; i++) if (done.indexOf(i) > -1) n++;
+      return '<button type="button" data-s="'+k+'" class="'+(k===cs?'on':'')+'">'+esc(s.t)+' · '+n+'/'+(s.to-s.from+1)+'</button>';
+    }).join('');
+    var s = SECTIONS[cs], h = '';
+    for (var i = s.from; i <= s.to; i++) h += '<button type="button" data-i="'+i+'" class="'+(i===cur?'cur ':'')+(done.indexOf(i)>-1?'done':'')+'" aria-label="קטע '+(i+1)+'">'+(i+1)+'</button>';
+    document.getElementById('segNav').innerHTML = h;
+  }
+  document.getElementById('secBtns').addEventListener('click', function(e){ var b = e.target.closest('button'); if (!b) return; cur = SECTIONS[+b.dataset.s].from; store.set('cur', cur); renderGuide(); });
+  document.getElementById('segNav').addEventListener('click', function(e){ var b = e.target.closest('button'); if (!b) return; cur = +b.dataset.i; store.set('cur', cur); renderGuide(); });
+
+  function renderGuide(){
+    renderNav();
+    var i = cur, m = META[i], words = segWords(i), sec = SECTIONS[sectionOf(i)];
+    var quiz;
+    if (m.r){
       var picked = answers[i];
-      if (picked === s.r) correct++;
-      var box = document.createElement('div');
-      box.className = 'seg';
-      box.innerHTML = '<p class="aram">'+s.a+'</p>' + (picked ? '' : '<p class="q">איזה מהלך זה?</p>');
-      var ch = document.createElement('div'); ch.className = 'choices';
-      ROLES.forEach(function(r){
-        var b = document.createElement('button'); b.type = 'button'; b.textContent = r;
-        if (picked){
-          b.disabled = true;
-          if (r === s.r) b.className = 'right';
-          else if (r === picked) b.className = 'wrong';
-        } else {
-          b.addEventListener('click', function(){ answers[i] = r; store.set('sugya', answers); renderSegs(); });
-        }
-        ch.appendChild(b);
-      });
-      box.appendChild(ch);
-      if (picked){
-        var rv = document.createElement('div'); rv.className = 'reveal';
-        rv.innerHTML = '<span class="chip" style="justify-self:start">'+s.r+'</span><p class="tr">'+s.tr+'</p><p class="ex">'+s.ex+'</p>';
-        box.appendChild(rv);
-      }
-      segsEl.appendChild(box);
-    });
-    var answered = Object.keys(answers).length;
-    document.getElementById('score').textContent = correct + ' נכונות מתוך ' + SEGS.length + (answered < SEGS.length ? ' · נענו ' + answered : '');
-  }
-  document.getElementById('sugyaReset').addEventListener('click', function(){ answers = {}; store.set('sugya', answers); renderSegs(); });
-  renderSegs();
+      quiz = '<div class="choices">'+ROLES.map(function(r){
+        var cls = picked ? (r === m.r ? 'right' : (r === picked ? 'wrong' : '')) : '';
+        return '<button type="button" data-role="'+r+'" class="'+cls+'"'+(picked?' disabled':'')+'>'+r+'</button>';
+      }).join('')+'</div>' + (picked ? '<p><span class="chip">'+m.r+'</span> '+esc(m.why)+'</p>' : '');
+    } else {
+      quiz = '<p><span class="chip gold">'+esc(m.label)+'</span></p><p class="hint">משימה: '+esc(m.task)+' ענו לעצמכם לפני שאתם פותחים את הביאור.</p>';
+    }
+    var isDone = done.indexOf(i) > -1;
+    guide.innerHTML =
+      '<div class="row"><span class="chip">קטע '+(i+1)+' מתוך '+N+' · '+esc(sec.t)+'</span>'+(isDone?'<span class="chip" style="background:var(--ok-soft);color:var(--ok)">סיימת ✓</span>':'')+'</div>'+
+      '<div class="step"><h3><span class="n">1</span>קריאה בקול</h3><p class="sgtext">'+segHTML(i)+'</p><p class="hint">קראו את הקטע פעמיים בקול. איפה נגמר כל משפט? איפה יש שאלה?</p></div>'+
+      '<div class="step"><h3><span class="n">2</span>מילים</h3>'+(words.length ? '<div class="words">'+words.map(function(g){ return '<span><b>'+esc(GLOSS[g].k)+'</b> = '+esc(GLOSS[g].m)+'</span>'; }).join('')+'</div>' : '<p class="hint">בקטע הזה אין מילים מסומנות. הוא כתוב בעברית של המשנה.</p>')+'</div>'+
+      '<div class="step"><h3><span class="n">3</span>'+(m.r ? 'איזה מהלך זה?' : 'מה יש כאן?')+'</h3>'+quiz+'</div>'+
+      '<div class="step"><h3><span class="n">4</span>רש"י</h3><div class="ctext">'+(commHTML(D.rashi[i], i) || '<p class="cempty">אין רש"י על הקטע הזה.</p>')+'</div></div>'+
+      '<div class="step"><h3><span class="n">5</span>ביאור</h3><details id="stzBox"><summary>פתחו את ביאור שטיינזלץ אחרי שניסיתם להבין לבד</summary><div class="stz">'+(D.steinsaltz[i]||'')+'</div></details>'+
+        (D.tosafot[i].length ? '<details><summary>תוספות על הקטע, למתקדמים</summary><div class="ctext">'+commHTML(D.tosafot[i], i)+'</div></details>' : '')+'</div>'+
+      '<div class="step"><h3><span class="n">6</span>סיכום במילים שלך</h3><label class="hint" for="note">מה נאמר כאן, ולמה? (נשמר בדפדפן הזה)</label><textarea id="note">'+esc(notes[i]||'')+'</textarea></div>'+
+      '<div class="step"><h3><span class="n">7</span>סיום</h3>'+(sec.more && i === sec.to ? '<p class="hint">'+esc(sec.more)+'</p>' : '')+
+        '<div class="row"><button class="btn ghost" type="button" id="gPrev"'+(i===0?' disabled':'')+'>הקטע הקודם</button>'+
+        '<button class="btn" type="button" id="gDone">'+(isDone ? 'לקטע הבא' : 'סיימתי, לקטע הבא')+'</button></div></div>';
 
-  /* 4. Glossary + flashcards */
-  var W = [
-    ['מאי','מה','"מאי טעמא?" = מה הטעם?'],
-    ['אמאי','למה','פותח קושיא: למה הדין כך?'],
-    ['היכי דמי','איך מדובר?','בקשה לתאר את המקרה המדויק.'],
-    ['מנא הני מילי','מניין הדברים האלה?','שאלה על מקור הדין בתורה. בקיצור: מנה"מ.'],
-    ['תנן','שנינו','מביא ציטוט ממשנה.'],
-    ['תניא','שנויה','מביא ציטוט מברייתא, משנה שלא נכנסה לשישה סדרים.'],
-    ['תנו רבנן','שנו רבותינו','פותח ברייתא. בקיצור: ת"ר.'],
-    ['קתני','שונה (המשנה)','"דקתני" = ששנה, שכתוב במשנה.'],
-    ['לתני / ליתני','שישנה','קושיא: היה צריך לכתוב אחרת.'],
-    ['איתמר','נאמר','פותח מחלוקת או מימרא של אמוראים.'],
-    ['אמר מר','אמר החכם','מצטט שוב משפט מהמקור כדי לדון בו.'],
-    ['תא שמע','בוא ושמע','מביא ראיה. בקיצור: ת"ש.'],
-    ['מיתיבי','מקשים (מברייתא)','קושיא על אמורא ממקור של תנאים.'],
-    ['איבעיא להו','נשאלה להם שאלה','פותח שאלה בלי תשובה ידועה.'],
-    ['תיקו','(השאלה) עומדת','השאלה נשארה בלי הכרעה.'],
-    ['תיובתא','הפרכה','דעה של אמורא נדחתה ממקור תנאי.'],
-    ['קשיא','קשה','קושיא שנשארת, אבל לא הפרכה מוחלטת.'],
-    ['מתקיף לה','מקשה עליה','אמורא מקשה על דברי אמורא אחר.'],
-    ['הכא במאי עסקינן','כאן במה אנו עוסקים?','תירוץ שמצמצם את המקור למקרה מסוים. בקיצור: הב"ע.'],
-    ['לא צריכא','לא נצרכה (אלא ל...)','מסביר למה הדין נצרך, אף שנראה פשוט.'],
-    ['פשיטא','פשוט!','קושיא: למה צריך לומר דבר מובן מאליו?'],
-    ['קא משמע לן','משמיע לנו','החידוש שבדין. בקיצור: קמ"ל.'],
-    ['שמע מינה','שמע ממנה, למד מכאן','מסקנה שהוכחה. בקיצור: ש"מ.'],
-    ['לימא','נאמר?','הצעה, שבדרך כלל נדחית בהמשך.'],
-    ['דילמא','שמא, אולי','דחיית ראיה: אולי אפשר להבין אחרת.'],
-    ['אלא','אלא','חזרה מהצעה קודמת והחלפתה.'],
-    ['אי הכי','אם כך','פותח קושיא שנובעת מהתירוץ הקודם.'],
-    ['ואי בעית אימא','ואם תרצה, אמור','תירוץ חלופי.'],
-    ['והא','והרי','פותח קושיא מדבר ידוע.'],
-    ['ותו','ועוד','קושיא או טענה נוספת.'],
-    ['בשלמא','בשלום, מובן','"מובן לגבי X, אבל לגבי Y קשה".'],
-    ['אלמא','מכאן ש...','מסקנה ממקור.'],
-    ['אדרבה','להפך','טענה הפוכה.'],
-    ['איכא / ליכא','יש / אין',''],
-    ['הני','אלה','"הני מילי" = הדברים האלה.'],
-    ['מילי','דברים, עניינים','"מילי דשחרית" = עניני שחרית.'],
-    ['רישא / סיפא','תחילת / סוף (המשנה)','"מציעתא" = האמצע.'],
-    ['הדר','חוזר','"והדר" = ואחר כך.'],
-    ['יליף','לומד','לומד דין ממקור. "ילפינן" = אנו לומדים.'],
-    ['דכתיב','שכתוב','מביא פסוק.'],
-    ['כולי עלמא','כל העולם, כולם','"דכולי עלמא" = לדעת כולם.'],
-    ['טעמא','טעם','"טעמא דמר" = הטעם של החכם.'],
-    ['מהו','מה הדין?','שאלה על מקרה מסוים.'],
-    ['אימת','מתי','']
-  ];
-  var known = store.get('known', []);
-  var order = W.map(function(_, i){ return i; });
-  var cur = 0, flipped = false;
-  function shuffle(a){ for (var i=a.length-1;i>0;i--){ var j=Math.floor(Math.random()*(i+1)); var t=a[i];a[i]=a[j];a[j]=t; } return a; }
-  function queue(){ var q = order.filter(function(i){ return known.indexOf(i) === -1; }); return q.length ? q : order; }
-  var Q = shuffle(queue().slice());
-  var flash = document.getElementById('flash');
-  function renderFlash(){
-    var w = W[Q[cur % Q.length]];
-    flash.innerHTML = flipped
-      ? '<span class="term">'+w[0]+'</span><span class="mean">'+w[1]+'</span>'+(w[2]?'<span class="use">'+w[2]+'</span>':'')
-      : '<span class="term">'+w[0]+'</span><span class="hint">לחצו כדי לראות את הפירוש</span>';
-    var k = known.length;
-    document.getElementById('knownCount').textContent = 'יודע ' + k + ' מתוך ' + W.length;
-    document.getElementById('knownBar').style.width = (k / W.length * 100) + '%';
+    guide.querySelectorAll('[data-role]').forEach(function(b){
+      b.addEventListener('click', function(){ answers[i] = b.dataset.role; store.set('answers', answers); renderGuide(); });
+    });
+    document.getElementById('note').addEventListener('input', function(e){ notes[i] = e.target.value; store.set('notes', notes); });
+    document.getElementById('gPrev').onclick = function(){ cur = Math.max(0, i-1); store.set('cur', cur); renderGuide(); window.scrollTo({top:0}); };
+    document.getElementById('gDone').onclick = function(){
+      markDone(i, true); renderDaf();
+      cur = Math.min(N-1, i+1); store.set('cur', cur); renderGuide(); window.scrollTo({top:0});
+    };
   }
-  function next(markKnown){
-    var idx = Q[cur % Q.length];
-    if (markKnown && known.indexOf(idx) === -1) known.push(idx);
-    if (!markKnown){ var k = known.indexOf(idx); if (k > -1) known.splice(k,1); }
+
+  /* ---- WORDS ---- */
+  var OCC = GLOSS.map(function(_, g){ for (var i = 0; i < N; i++) if (segWords(i).indexOf(g) > -1) return i; return -1; });
+  var known = store.get('known', []);
+  function shuffle(a){ for (var i=a.length-1;i>0;i--){ var j=Math.floor(Math.random()*(i+1)); var t=a[i];a[i]=a[j];a[j]=t; } return a; }
+  function queue(){ var all = GLOSS.map(function(_, i){ return i; }); var q = all.filter(function(i){ return known.indexOf(i) === -1; }); return shuffle(q.length ? q : all); }
+  var Q = queue(), qi = 0, flipped = false;
+  var flash = document.getElementById('flash');
+  function ctxHTML(g){
+    var i = OCC[g]; if (i < 0) return '';
+    return MATCH[i].map(function(p){ return p.g === g ? '<mark>'+esc(p.t)+'</mark>' : esc(p.t); }).join(' ');
+  }
+  function renderFlash(){
+    var g = Q[qi % Q.length], e = GLOSS[g];
+    flash.innerHTML = '<span class="term">'+esc(e.k)+'</span>' + (flipped
+      ? '<span class="mean">'+esc(e.m)+'</span><span class="ctx">'+ctxHTML(g)+'</span><span class="hint">קטע '+(OCC[g]+1)+' בדף · '+(e.s?'שטיינזלץ':'הסבר הכלי')+'</span>'
+      : '<span class="ctx">'+ctxHTML(g)+'</span><span class="hint">לחצו כדי לראות את הפירוש</span>');
+    document.getElementById('knownCount').textContent = 'יודע ' + known.length + ' מתוך ' + GLOSS.length;
+    document.getElementById('knownBar').style.width = (known.length / GLOSS.length * 100) + '%';
+  }
+  function nextCard(ok){
+    var g = Q[qi % Q.length], k = known.indexOf(g);
+    if (ok && k === -1) known.push(g);
+    if (!ok && k > -1) known.splice(k, 1);
     store.set('known', known);
-    cur++; flipped = false;
-    if (cur >= Q.length){ Q = shuffle(queue().slice()); cur = 0; }
+    qi++; flipped = false;
+    if (qi >= Q.length){ Q = queue(); qi = 0; }
     renderFlash(); renderGloss();
   }
   flash.addEventListener('click', function(){ flipped = !flipped; renderFlash(); });
-  document.getElementById('fYes').addEventListener('click', function(){ next(true); });
-  document.getElementById('fNo').addEventListener('click', function(){ next(false); });
-
-  var gloss = document.getElementById('gloss'), qIn = document.getElementById('q');
+  document.getElementById('fYes').addEventListener('click', function(){ nextCard(true); });
+  document.getElementById('fNo').addEventListener('click', function(){ nextCard(false); });
+  var gloss = document.getElementById('gloss');
   function renderGloss(){
-    var q = qIn.value.trim();
-    var rows = W.map(function(w, i){ return [w, i]; }).filter(function(p){ return !q || p[0].join(' ').indexOf(q) > -1; });
-    gloss.innerHTML = rows.length ? rows.map(function(p){
-      var w = p[0];
-      return '<div'+(known.indexOf(p[1])>-1?' class="known"':'')+'><dt>'+w[0]+'</dt><dd>'+w[1]+(w[2]?'<small>'+w[2]+'</small>':'')+'</dd></div>';
-    }).join('') : '<p class="empty">לא נמצא מונח. נסו מילה אחרת.</p>';
+    gloss.innerHTML = GLOSS.map(function(e, g){
+      return '<div'+(known.indexOf(g)>-1?' class="known"':'')+'><dt>'+esc(e.k)+'</dt><dd>'+esc(e.m)+'<small>'+(e.s?'שטיינזלץ':'הסבר הכלי')+' · <button type="button" data-open="'+OCC[g]+'">קטע '+(OCC[g]+1)+' בדף</button></small></dd></div>';
+    }).join('');
   }
-  qIn.addEventListener('input', renderGloss);
-  renderFlash(); renderGloss();
+  gloss.addEventListener('click', function(e){ var b = e.target.closest('[data-open]'); if (!b) return; showTab('tab-daf'); openSheet(+b.dataset.open); });
+
+  /* ---- HOW ---- */
+  var MOVES = [
+    ['שאלה', 'בקשה להבין: מה המקור? מה המקרה? ("מאי", "ממאי", "היכא קאי")'],
+    ['קושיא', 'הצבעה על בעיה: סתירה, ניסוח מוזר או דבר מיותר ("ותו", "לתני", "אי הכי")'],
+    ['תירוץ', 'תשובה שמיישבת את הקושיא ("תנא אקרא קאי")'],
+    ['תירוץ נוסף', 'תשובה חלופית ("ואי בעית אימא")'],
+    ['ראיה', 'הבאת מקור: פסוק ("דכתיב") או ברייתא ("כדתניא")']
+  ];
+  document.getElementById('moves').innerHTML = MOVES.map(function(m){ return '<div class="move"><b>'+m[0]+'</b><span>'+m[1]+'</span></div>'; }).join('');
+  var S = D.sources;
+  document.getElementById('srcList').innerHTML =
+    'משנה וגמרא: '+esc(S.gemara[0])+' ('+esc(S.gemara[1])+'). רש"י ותוספות: '+esc(S.rashi[0])+' ('+esc(S.rashi[1])+'). ביאור: '+esc(S.steinsaltz[0])+', ביאור הרב עדין שטיינזלץ, הוצאת קורן ('+esc(S.steinsaltz[1])+'). כל הטקסטים נלקחו מ<a href="https://www.sefaria.org/'+esc(D.ref)+'" target="_blank" rel="noopener">ספריא</a>.';
+
+  renderDaf(); renderGuide(); renderFlash(); renderGloss();
+  var saved = null; try{ saved = localStorage.getItem('daf:tab'); }catch(e){}
+  var hashMap = {daf:'tab-daf', learn:'tab-learn', words:'tab-words', how:'tab-how'};
+  var start = hashMap[location.hash.slice(1)] || saved;
+  if (start && document.getElementById(start)) showTab(start);
 })();
 </script>

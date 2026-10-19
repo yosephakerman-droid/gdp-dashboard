@@ -1,0 +1,569 @@
+<title>מורה דרך לגמרא</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Frank+Ruhl+Libre:wght@500;700;900&family=Assistant:wght@400;600;700&family=Noto+Rashi+Hebrew:wght@400;600;700&display=swap">
+<style>
+/* Layout: the real daf is the centre of everything; a bottom sheet opens per segment; guided mode walks the same segments */
+:root{
+  --paper:#F1F3F0; --sheet:#FBFCFA; --ink:#1C222B; --muted:#5D6672; --line:#D5DAD6;
+  --accent:#1F5A7A; --accent-soft:#DCE8EF; --gold:#8C6A16; --gold-soft:#F2E8CF;
+  --ok:#2F7A4B; --ok-soft:#DDEFE3; --bad:#A3392E; --bad-soft:#F5DEDA; --shadow:rgba(20,30,40,.18);
+  --f-display:"Frank Ruhl Libre","David Libre","Times New Roman",serif;
+  --f-body:"Assistant","Segoe UI",Arial,sans-serif;
+  --f-rashi:"Noto Rashi Hebrew","Frank Ruhl Libre",serif;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --paper:#13171C; --sheet:#1B2027; --ink:#E7E4DB; --muted:#9AA3AE; --line:#2E353E;
+  --accent:#86BAD8; --accent-soft:#1D3342; --gold:#D8B45A; --gold-soft:#3A3120;
+  --ok:#7CC796; --ok-soft:#1C3326; --bad:#E58C80; --bad-soft:#3D2220; --shadow:rgba(0,0,0,.5); color-scheme:dark}}
+:root[data-theme="dark"]{
+  --paper:#13171C; --sheet:#1B2027; --ink:#E7E4DB; --muted:#9AA3AE; --line:#2E353E;
+  --accent:#86BAD8; --accent-soft:#1D3342; --gold:#D8B45A; --gold-soft:#3A3120;
+  --ok:#7CC796; --ok-soft:#1C3326; --bad:#E58C80; --bad-soft:#3D2220; --shadow:rgba(0,0,0,.5); color-scheme:dark}
+
+*{box-sizing:border-box}
+body{background:var(--paper);color:var(--ink);font-family:var(--f-body);font-size:17px;line-height:1.65;direction:rtl}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--paper)}
+.wrap{max-width:1040px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:20px 120px}
+h1,h2,h3{font-family:var(--f-display);text-wrap:balance;line-height:1.25;margin:0}
+h1{font-size:clamp(30px,7vw,44px);font-weight:900}
+h2{font-size:24px;font-weight:700}
+h3{font-size:19px;font-weight:700}
+p{margin:0}
+a{color:var(--accent)}
+.lede{color:var(--muted);max-width:62ch}
+.muted{color:var(--muted)}
+header.top{display:grid;gap:6px;padding-block:6px 14px}
+.eyebrow{font-size:13px;letter-spacing:.06em;color:var(--gold);font-weight:700}
+
+nav.tabs{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--paper);display:flex;gap:6px;overflow-x:auto;padding-block:10px;border-bottom:1px solid var(--line);scrollbar-width:none}
+nav.tabs button{flex:0 0 auto;font:600 15px var(--f-body);color:var(--muted);background:transparent;border:1px solid transparent;border-radius:999px;padding:7px 14px;cursor:pointer}
+nav.tabs button[aria-selected="true"]{color:var(--accent);background:var(--accent-soft);border-color:var(--accent)}
+button:focus-visible,.seg:focus-visible,.w:focus-visible,textarea:focus-visible,input:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
+
+section.panel{display:grid;gap:18px;padding-top:20px}
+.card{background:var(--sheet);border:1px solid var(--line);border-radius:10px;padding:16px;display:grid;gap:10px;min-width:0}
+.note{font-size:14px;color:var(--muted);border-inline-start:3px solid var(--gold);padding-inline-start:10px}
+.chip{display:inline-block;font-size:13px;font-weight:700;padding:2px 10px;border-radius:999px;background:var(--accent-soft);color:var(--accent)}
+.chip.gold{background:var(--gold-soft);color:var(--gold)}
+.btn{font:700 15px var(--f-body);padding:9px 16px;border-radius:8px;border:1px solid var(--accent);background:var(--accent);color:var(--sheet);cursor:pointer}
+.btn.ghost{background:transparent;color:var(--accent)}
+.btn:disabled{opacity:.45;cursor:default}
+.row{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between}
+.progress{display:flex;align-items:center;gap:10px;font-size:14px;color:var(--muted)}
+.bar{flex:1;height:8px;border-radius:4px;background:var(--line);overflow:hidden;min-width:60px}
+.bar>i{display:block;height:100%;background:var(--ok);width:0;transition:width .3s}
+
+/* ---------- The daf ---------- */
+.dafhead{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:baseline;gap:8px;border-bottom:2px solid var(--ink);padding-bottom:6px;font-family:var(--f-display)}
+.dafhead b{font-size:22px}
+.daf{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.7fr) minmax(0,1fr);grid-template-areas:"rashi gemara tos";gap:14px;background:var(--sheet);border:1px solid var(--line);border-radius:6px;padding:14px}
+.col{min-width:0;display:grid;align-content:start;gap:6px}
+.col>h4{margin:0;font:700 13px var(--f-body);color:var(--gold);letter-spacing:.04em;border-bottom:1px solid var(--line);padding-bottom:4px}
+.c-rashi{grid-area:rashi}.c-gemara{grid-area:gemara}.c-tos{grid-area:tos}
+.gtext{font-family:var(--f-display);font-size:20px;line-height:1.9;text-align:justify}
+.gtext .blk{display:block;margin-bottom:10px}
+.open{font-weight:900;font-size:1.25em;color:var(--gold)}
+.seg{cursor:pointer;border-radius:4px;padding:1px 2px;transition:background .15s;-webkit-box-decoration-break:clone;box-decoration-break:clone}
+.seg:hover{background:var(--gold-soft)}
+.seg.sel{background:var(--accent-soft);box-shadow:inset 0 -2px 0 var(--accent)}
+.seg.done::after{content:"✓";font:700 12px var(--f-body);color:var(--ok);vertical-align:super;margin-inline-start:2px}
+.w{border-bottom:1.5px dotted var(--accent);cursor:help}
+.ctext{font-family:var(--f-rashi);font-size:15px;line-height:1.75;text-align:justify}
+.ctext p{margin:0 0 6px;border-radius:4px;padding:2px 4px;transition:background .15s;cursor:pointer}
+.ctext p.sel{background:var(--accent-soft)}
+.dh{font-weight:700}
+.cempty{font:14px var(--f-body);color:var(--muted)}
+@media (max-width:760px){
+  .daf{grid-template-columns:minmax(0,1fr) minmax(0,1fr);grid-template-areas:"gemara gemara" "rashi tos";padding:12px;gap:12px}
+  .gtext{font-size:19px}
+  .ctext{font-size:13.5px}
+}
+@media (max-width:420px){
+  .daf{grid-template-columns:minmax(0,1fr);grid-template-areas:"gemara" "rashi" "tos"}
+}
+
+/* word popover */
+#pop{position:absolute;z-index:30;max-width:260px;background:var(--ink);color:var(--paper);border-radius:8px;padding:8px 12px;font-size:15px;line-height:1.4;box-shadow:0 6px 20px var(--shadow)}
+#pop b{font-family:var(--f-display);font-size:17px}
+#pop small{display:block;opacity:.75;font-size:12px;margin-top:2px}
+
+/* bottom sheet */
+#sheet{position:fixed;overscroll-behavior:contain;inset:auto 0 0 0;z-index:20;background:var(--sheet);border-top:1px solid var(--line);box-shadow:0 -10px 30px var(--shadow);border-radius:14px 14px 0 0;max-height:62vh;overflow-y:auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-bottom:calc(16px + env(safe-area-inset-bottom,0px));padding-top:0}
+#sheet .inner{max-width:760px;margin:0 auto;display:grid;gap:12px}
+#sheet .grab{position:sticky;top:0;background:var(--sheet);display:flex;justify-content:space-between;align-items:center;gap:8px;padding-block:12px 8px;border-bottom:1px solid var(--line)}
+.x{font:700 20px var(--f-body);background:transparent;border:0;color:var(--muted);cursor:pointer;padding:4px 10px}
+.sgtext{font-family:var(--f-display);font-size:21px;line-height:1.8}
+details{border:1px solid var(--line);border-radius:8px;padding:8px 12px;background:var(--paper)}
+details>summary{cursor:pointer;font-weight:700;font-size:15px}
+details[open]>summary{margin-bottom:6px}
+.stz{font-size:16px;line-height:1.75}
+.stz b{font-family:var(--f-display);font-size:1.05em}
+.stz small{color:var(--muted);font-size:.95em}
+.stz .sec{display:none}
+.words{display:flex;flex-wrap:wrap;gap:6px}
+.words span{font-size:14px;background:var(--paper);border:1px solid var(--line);border-radius:6px;padding:2px 8px}
+.words span b{font-family:var(--f-display)}
+
+/* guided */
+.sections{display:flex;flex-wrap:wrap;gap:8px}
+.sections button{font:600 14px var(--f-body);padding:6px 12px;border-radius:999px;border:1px solid var(--line);background:var(--sheet);color:var(--ink);cursor:pointer}
+.sections button.on{border-color:var(--accent);color:var(--accent);background:var(--accent-soft)}
+.step{display:grid;gap:8px;padding:14px;border:1px solid var(--line);border-radius:10px;background:var(--sheet)}
+.step>h3{display:flex;gap:10px;align-items:baseline}
+.step>h3 .n{font:900 20px var(--f-display);color:var(--gold)}
+.step .hint{font-size:14px;color:var(--muted)}
+.choices{display:flex;flex-wrap:wrap;gap:8px}
+.choices button{font:600 15px var(--f-body);padding:7px 14px;border-radius:999px;border:1px solid var(--line);background:var(--paper);color:var(--ink);cursor:pointer}
+.choices button.right{background:var(--ok-soft);border-color:var(--ok);color:var(--ok)}
+.choices button.wrong{background:var(--bad-soft);border-color:var(--bad);color:var(--bad)}
+.choices button:disabled{cursor:default}
+textarea{width:100%;min-height:90px;font:16px var(--f-body);padding:10px;border-radius:8px;border:1px solid var(--line);background:var(--paper);color:var(--ink);resize:vertical}
+.segnav{display:flex;gap:6px;flex-wrap:wrap}
+.segnav button{width:34px;height:34px;border-radius:8px;border:1px solid var(--line);background:var(--sheet);color:var(--ink);font:700 14px var(--f-body);cursor:pointer;font-variant-numeric:tabular-nums}
+.segnav button.cur{border-color:var(--accent);background:var(--accent-soft);color:var(--accent)}
+.segnav button.done{border-color:var(--ok);color:var(--ok)}
+
+/* words */
+.flash{display:grid;place-items:center;text-align:center;min-height:220px;background:var(--sheet);border:1px solid var(--line);border-radius:12px;padding:22px;cursor:pointer;gap:8px;width:100%;font:inherit;color:var(--ink)}
+.flash .term{font:900 clamp(32px,9vw,46px) var(--f-display)}
+.flash .hint{font-size:14px;color:var(--muted)}
+.flash .mean{font-size:20px;font-weight:700;color:var(--accent)}
+.flash .ctx{font:18px var(--f-display);color:var(--muted);max-width:46ch}
+.flash .ctx mark{background:var(--gold-soft);color:var(--ink);padding:0 2px;border-radius:3px}
+.flash-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.btn.no{background:var(--bad-soft);color:var(--bad);border-color:var(--bad)}
+.btn.yes{background:var(--ok-soft);color:var(--ok);border-color:var(--ok)}
+.gloss{display:grid;background:var(--sheet);border:1px solid var(--line);border-radius:10px;overflow:hidden;margin:0}
+.gloss div{display:grid;grid-template-columns:minmax(110px,30%) 1fr;gap:12px;padding:10px 14px;border-bottom:1px solid var(--line)}
+.gloss div:last-child{border-bottom:0}
+.gloss dt{font:700 18px var(--f-display);margin:0}
+.gloss dd{margin:0;min-width:0}
+.gloss dd small{display:block;color:var(--muted);font-size:13.5px}
+.gloss dd button{font:600 13px var(--f-body);background:none;border:0;color:var(--accent);cursor:pointer;padding:0;text-decoration:underline}
+.gloss .known dt::after{content:" ✓";color:var(--ok);font-size:14px}
+
+/* method */
+ol.steps{margin:0;padding-inline-start:22px;display:grid;gap:8px}
+ol.steps li::marker{font:900 18px var(--f-display);color:var(--gold)}
+.moves{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px}
+.move{display:grid;gap:2px;padding:10px 12px;border-radius:8px;background:var(--sheet);border:1px solid var(--line)}
+.move b{font-family:var(--f-display);font-size:18px}
+.move span{font-size:14.5px;color:var(--muted)}
+.two{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <span class="eyebrow">לומדים גמרא על דף אמיתי</span>
+    <h1>מורה דרך לגמרא</h1>
+    <p class="lede">כל הלימוד כאן נעשה על דף אחד: מסכת ברכות, דף ב עמוד א. זה הדף הראשון בש"ס, והוא מופיע כאן עם רש"י ותוספות. לחצו על קטע בדף כדי לפתוח אותו עם רש"י, ביאור ותוספות. לחיצה על מילה עם קו מנוקד מציגה את התרגום שלה.</p>
+  </header>
+
+  <nav class="tabs" role="tablist" aria-label="חלקי הכלי">
+    <button role="tab" id="tab-daf" aria-controls="p-daf" aria-selected="true">הדף</button>
+    <button role="tab" id="tab-learn" aria-controls="p-learn" aria-selected="false">לימוד מודרך</button>
+    <button role="tab" id="tab-words" aria-controls="p-words" aria-selected="false">מילון הדף</button>
+    <button role="tab" id="tab-how" aria-controls="p-how" aria-selected="false">איך קוראים דף</button>
+  </nav>
+
+  <!-- DAF -->
+  <section class="panel" id="p-daf" role="tabpanel" aria-labelledby="tab-daf">
+    <div class="progress"><span id="dafProg"></span><div class="bar"><i id="dafBar"></i></div></div>
+    <div>
+      <div class="dafhead"><b>מסכת ברכות</b><span>פרק ראשון · מאימתי</span><b>דף ב.</b></div>
+      <div class="daf" id="daf">
+        <div class="col c-rashi"><h4>רש"י</h4><div class="ctext" id="colRashi"></div></div>
+        <div class="col c-gemara"><h4>משנה וגמרא</h4><div class="gtext" id="colGemara"></div></div>
+        <div class="col c-tos"><h4>תוספות</h4><div class="ctext" id="colTos"></div></div>
+      </div>
+    </div>
+    <p class="note">הטקסטים הם נוסח דפוס וילנא, ונלקחו מספריא. החלוקה לקטעים היא של ספריא, ובדף המודפס אין חלוקה כזו. כאן הטקסט מסודר בשלוש עמודות שמחקות את הדף המודפס, אבל לא שומר על העימוד המקורי. אפשר לראות גם <a href="https://commons.wikimedia.org/wiki/File:Berakhot2a.jpg" target="_blank" rel="noopener">סריקה של הדף המודפס</a>.</p>
+  </section>
+
+  <!-- GUIDED -->
+  <section class="panel" id="p-learn" role="tabpanel" aria-labelledby="tab-learn" hidden>
+    <div>
+      <h2>לימוד מודרך, קטע אחר קטע</h2>
+      <p class="lede">עוברים על הדף קטע אחרי קטע, ובכל קטע עושים את אותם שבעה שלבים. בסוף כל קטע מסמנים "סיימתי".</p>
+    </div>
+    <div class="sections" id="secBtns"></div>
+    <div class="segnav" id="segNav" aria-label="קטעים"></div>
+    <div id="guide" style="display:grid;gap:12px"></div>
+  </section>
+
+  <!-- WORDS -->
+  <section class="panel" id="p-words" role="tabpanel" aria-labelledby="tab-words" hidden>
+    <div>
+      <h2>מילון הדף</h2>
+      <p class="lede">כל המילים בארמית שמסומנות בדף. כל כרטיס מראה את המילה כפי שהיא מופיעה בדף. לחצו על הכרטיס כדי לראות את הפירוש.</p>
+    </div>
+    <div class="progress"><span id="knownCount"></span><div class="bar"><i id="knownBar"></i></div></div>
+    <button class="flash" id="flash" type="button" aria-live="polite"></button>
+    <div class="flash-actions">
+      <button class="btn no" id="fNo" type="button">עוד לא</button>
+      <button class="btn yes" id="fYes" type="button">ידעתי</button>
+    </div>
+    <h3>כל המילים</h3>
+    <dl class="gloss" id="gloss"></dl>
+    <p class="note">פירוש שמסומן "שטיינזלץ" לקוח מהסוגריים בביאור שטיינזלץ לאותו קטע. פירוש שמסומן "הסבר הכלי" כתבתי בעצמי ולא בדקתי מול מקור.</p>
+  </section>
+
+  <!-- HOW -->
+  <section class="panel" id="p-how" role="tabpanel" aria-labelledby="tab-how" hidden>
+    <div class="two">
+      <div class="card">
+        <h3>מה יש על הדף</h3>
+        <p><b>משנה (מתני׳):</b> בעברית, ומסודרת בתחילת הסוגיה. בדף שלנו היא קטעים 1–5.</p>
+        <p><b>גמרא (גמ׳):</b> הדיון על המשנה, ברובו בארמית. בדף שלנו היא קטעים 6–14.</p>
+        <p><b>רש"י:</b> רבי שלמה יצחקי, צרפת, המאה ה־11. מסביר את הפשט. הוא מודפס בצד הפנימי של הדף, בכתב רש"י, ופותח כל הערה במילים מהגמרא שהוא מפרש ("דיבור המתחיל", מודגש בדף).</p>
+        <p><b>תוספות:</b> חכמי צרפת ואשכנז מהמאות ה־12 וה־13. משווים לסוגיות אחרות ומקשים, ולפעמים חולקים על רש"י. הם מודפסים בצד החיצוני של הדף. זה שלב למתקדמים.</p>
+        <p><b>שוליים:</b> בדף המודפס יש גם עין משפט, מסורת הש"ס, תורה אור והגהות. הם לא מופיעים כאן, ואפשר לראות אותם ב<a href="https://commons.wikimedia.org/wiki/File:Berakhot2a.jpg" target="_blank" rel="noopener">סריקה</a>.</p>
+      </div>
+      <div class="card">
+        <h3>שבעת השלבים</h3>
+        <ol class="steps">
+          <li><b>קריאה בקול.</b> בגמרא אין פיסוק, והקול עוזר לשמוע איפה נגמר כל משפט.</li>
+          <li><b>מילים.</b> מתרגמים כל מילה בארמית.</li>
+          <li><b>מהלך.</b> מזהים אם המשפט הוא שאלה, קושיא, תירוץ או ראיה.</li>
+          <li><b>רש"י.</b> קוראים את רש"י על הקטע.</li>
+          <li><b>ביאור.</b> בודקים את ההבנה שלכם מול הביאור.</li>
+          <li><b>סיכום.</b> כותבים את הקטע במילים שלכם.</li>
+          <li><b>חזרה.</b> למחרת קוראים שוב את הקטעים שסיימתם, לפני שממשיכים.</li>
+        </ol>
+      </div>
+    </div>
+    <h3>המהלכים של הסוגיה</h3>
+    <div class="moves" id="moves"></div>
+    <div class="card">
+      <h3>מקורות ורישיונות</h3>
+      <p class="muted" id="srcList"></p>
+      <p class="muted">חלוקת הדף לסוגיות, סיווג המהלכים, ההסברים הקצרים בתרגול וחלק מפירושי המילים כתבתי בעצמי. הם לא חלק מהמקורות, וכדאי לבדוק אותם מול רב או מורה.</p>
+    </div>
+  </section>
+</div>
+
+<div id="pop" hidden></div>
+<div id="sheet" hidden role="dialog" aria-label="פרטי הקטע"><div class="inner" id="sheetInner"></div></div>
+
+<script>
+var D = /*DAF_DATA*/null;
+(function(){
+  var N = D.segments.length;
+  var store = {
+    get: function(k, d){ try{ var v = localStorage.getItem('daf:'+D.ref+':'+k); return v ? JSON.parse(v) : d; }catch(e){ return d; } },
+    set: function(k, v){ try{ localStorage.setItem('daf:'+D.ref+':'+k, JSON.stringify(v)); }catch(e){} }
+  };
+  function esc(s){ return String(s).replace(/[&<>"]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+
+  /* ---- teaching layer (written for this daf) ---- */
+  var SECTIONS = [
+    {t:'המשנה', from:0, to:4},
+    {t:'סוגיה א: למה "מאימתי" ולמה ערבית קודם', from:5, to:10},
+    {t:'סוגיה ב: למה לא "צאת הכוכבים"', from:11, to:13, more:'הדיון ממשיך בעמוד ב.'}
+  ];
+  var ROLES = ['שאלה','קושיא','תירוץ','תירוץ נוסף','ראיה'];
+  var META = [
+    {label:'דעה א: רבי אליעזר', task:'עד מתי אפשר לקרוא לפי רבי אליעזר?'},
+    {label:'דעה ב: חכמים', task:'עד מתי לפי חכמים?'},
+    {label:'דעה ג: רבן גמליאל', task:'עד מתי לפי רבן גמליאל?'},
+    {label:'מעשה', task:'מה עשה רבן גמליאל, ומה זה מלמד על שיטתו?'},
+    {label:'המשך המשנה: הכלל', task:'למה, לפי המשנה, אמרו חכמים "עד חצות"?'},
+    {r:'קושיא', why:'הגמרא מקשה: המשנה שואלת "מאימתי" כאילו כבר ידוע שיש חובה לקרוא שמע. איפה זה נאמר?'},
+    {r:'קושיא', why:'"ותו" = ועוד. זו קושיא שנייה על סדר המשנה.'},
+    {r:'תירוץ', why:'תשובה לשתי הקושיות: המשנה נסמכת על הפסוק, ובפסוק "בשכבך" בא לפני "ובקומך".'},
+    {r:'תירוץ נוסף', why:'"ואי בעית אימא" פותח תשובה אחרת לקושיא השנייה.'},
+    {r:'קושיא', why:'"אי הכי" = אם כך. זו קושיא על התירוץ, מהמשך המשנה שבו שחרית בא קודם.'},
+    {r:'תירוץ', why:'התנא פתח בערבית, ואחר כך כשעסק בשחרית השלים את כל דיני שחרית.'},
+    {r:'קושיא', why:'"מכדי... לתני" = הרי... שישנה! למה לא כתוב פשוט "צאת הכוכבים"?'},
+    {r:'תירוץ', why:'המשנה השמיעה דבר נוסף בדרך אגב. הגמרא מביאה ברייתא ("כדתניא") כראיה לחידוש הזה.'},
+    {r:'שאלה', why:'"וממאי" = ומנין? הגמרא שואלת על הפירוש של הפסוק שהובא בברייתא. התשובה בעמוד ב.'}
+  ];
+  var GLOSS = [
+    {k:'מתני׳', m:'מתניתין, כלומר המשנה שלנו', s:0},
+    {k:'גמ׳', m:'גמרא', s:0},
+    {k:'תנא', m:'התנא, חכם המשנה', s:1},
+    {k:'היכא קאי', m:'היכן הוא עומד? (על מה הוא נסמך)', s:1},
+    {k:'דקתני', m:'בזה שהוא שונה', s:1},
+    {k:'ותו', m:'ועוד', s:1},
+    {k:'מאי שנא', m:'מה שונה? מדוע?', s:1},
+    {k:'דתני', f:['דתני','תני'], m:'ששונה, שונה', s:0},
+    {k:'ברישא', m:'בתחילה', s:1},
+    {k:'לתני', m:'שישנה', s:1},
+    {k:'אקרא קאי', m:'על הכתוב עומד, נסמך על הפסוק', s:1},
+    {k:'דכתיב', f:['דכתיב','כדכתיב'], m:'שכך נאמר', s:1},
+    {k:'והכי קתני', m:'וכך שנינו', s:1},
+    {k:'דשכיבה', m:'של שכיבה', s:0},
+    {k:'אימת', m:'מתי', s:1},
+    {k:'ואי בעית אימא', m:'ואם תרצה אמור', s:1},
+    {k:'יליף', m:'למד', s:1},
+    {k:'אי הכי', m:'אם כך', s:1},
+    {k:'סיפא', m:'סוף המשנה', s:1},
+    {k:'והדר', m:'וחזר, ואחר כך', s:1},
+    {k:'דקאי', m:'שהוא עומד', s:1},
+    {k:'פריש', m:'פירש', s:1},
+    {k:'מילי', m:'עניינים, דברים', s:1},
+    {k:'אמר מר', m:'אמר החכם (ציטוט מהמשנה לפני שדנים בו)', s:1},
+    {k:'מכדי', m:'הרי', s:1},
+    {k:'קא אכלי', m:'אוכלים', s:1},
+    {k:'מלתא אגב אורחיה', m:'דבר אגב דרכו', s:1},
+    {k:'קמשמע לן', m:'השמיע לנו', s:1},
+    {k:'והא', m:'וזה', s:1},
+    {k:'לא מעכבא', m:'אינה מעכבת', s:1},
+    {k:'כדתניא', m:'כפי ששנינו (בברייתא)', s:1},
+    {k:'וממאי', f:['וממאי','ממאי'], m:'וממה? ומנין?', s:1},
+    {k:'דהאי', f:['דהאי','והאי','האי'], m:'שזה, וזה', s:1},
+    {k:'טהר יומא', m:'נטהר היום (הושלם היום)', s:1}
+  ];
+
+  /* tokenizer + glossary matcher */
+  var FORMS = {};
+  GLOSS.forEach(function(g, i){ (g.f || [g.k]).forEach(function(f){ FORMS[f] = i; }); });
+  function norm(t){ return t.replace(/[.,:;?!"״]/g, ''); }
+  function tokens(i){ return D.segments[i].split(/\s+/).filter(Boolean); }
+  function matchSeg(i){
+    var tk = tokens(i), out = [], j = 0;
+    while (j < tk.length){
+      var hit = null;
+      for (var L = 4; L >= 1; L--){
+        if (j + L > tk.length) continue;
+        var ph = tk.slice(j, j+L).map(norm).join(' ');
+        if (FORMS.hasOwnProperty(ph)){ hit = {g:FORMS[ph], L:L}; break; }
+      }
+      if (hit){ out.push({t:tk.slice(j, j+hit.L).join(' '), g:hit.g}); j += hit.L; }
+      else { out.push({t:tk[j]}); j++; }
+    }
+    return out;
+  }
+  var MATCH = []; for (var i = 0; i < N; i++) MATCH.push(matchSeg(i));
+  function segHTML(i){
+    return MATCH[i].map(function(p, k){
+      var t = esc(p.t);
+      if (k === 0 && /^(מתני׳|גמ׳)$/.test(p.t)) return '<span class="open w" data-g="'+p.g+'" tabindex="0">'+t+'</span>';
+      return p.g != null ? '<span class="w" data-g="'+p.g+'" tabindex="0">'+t+'</span>' : t;
+    }).join(' ');
+  }
+  function segWords(i){
+    var seen = {}, out = [];
+    MATCH[i].forEach(function(p){ if (p.g != null && !seen[p.g]){ seen[p.g] = 1; out.push(p.g); } });
+    return out;
+  }
+  function sectionOf(i){ for (var s = 0; s < SECTIONS.length; s++) if (i >= SECTIONS[s].from && i <= SECTIONS[s].to) return s; return 0; }
+  function commHTML(list, seg, cls){
+    return list.map(function(c){ return '<p data-seg="'+seg+'"'+(cls?' class="'+cls+'"':'')+'>'+(c[0]?'<span class="dh">'+esc(c[0])+'</span> – ':'')+esc(c[1])+'</p>'; }).join('');
+  }
+
+  /* state */
+  var done = store.get('done', []);
+  var answers = store.get('answers', {});
+  var notes = store.get('notes', {});
+  var cur = Math.min(store.get('cur', 0), N-1);
+
+  /* tabs */
+  var tabs = document.querySelectorAll('[role=tab]');
+  function showTab(id){
+    tabs.forEach(function(t){
+      var on = t.id === id;
+      t.setAttribute('aria-selected', on);
+      document.getElementById(t.getAttribute('aria-controls')).hidden = !on;
+    });
+    hidePop(); closeSheet();
+    try{ localStorage.setItem('daf:tab', id); }catch(e){}
+  }
+  tabs.forEach(function(t){ t.addEventListener('click', function(){ showTab(t.id); window.scrollTo({top:0}); }); });
+
+  /* ---- DAF ---- */
+  var colG = document.getElementById('colGemara'), colR = document.getElementById('colRashi'), colT = document.getElementById('colTos');
+  function renderDaf(){
+    var h = '<span class="blk">', r = '', t = '';
+    for (var i = 0; i < N; i++){
+      if (i === 5) h += '</span><span class="blk">';
+      h += '<span class="seg'+(done.indexOf(i)>-1?' done':'')+'" data-i="'+i+'" tabindex="0" role="button" aria-label="קטע '+(i+1)+'">'+segHTML(i)+'</span> ';
+      r += commHTML(D.rashi[i], i); t += commHTML(D.tosafot[i], i);
+    }
+    colG.innerHTML = h + '</span>';
+    colR.innerHTML = r || '<p class="cempty">אין</p>';
+    colT.innerHTML = t || '<p class="cempty">אין</p>';
+    var k = done.length;
+    document.getElementById('dafProg').textContent = 'למדת ' + k + ' מתוך ' + N + ' קטעים';
+    document.getElementById('dafBar').style.width = (k / N * 100) + '%';
+  }
+  function selectSeg(i){
+    document.querySelectorAll('.seg.sel, .ctext p.sel').forEach(function(e){ e.classList.remove('sel'); });
+    if (i == null) return;
+    document.querySelectorAll('.seg[data-i="'+i+'"], .ctext p[data-seg="'+i+'"]').forEach(function(e){ e.classList.add('sel'); });
+  }
+
+  /* word popover */
+  var pop = document.getElementById('pop');
+  function showPop(el){
+    var g = GLOSS[+el.dataset.g];
+    pop.innerHTML = '<b>'+esc(g.k)+'</b> = '+esc(g.m)+'<small>'+(g.s?'פירוש: שטיינזלץ':'פירוש: הסבר הכלי')+'</small>';
+    pop.hidden = false;
+    var r = el.getBoundingClientRect(), pw = pop.offsetWidth, vw = document.documentElement.clientWidth;
+    var left = Math.min(Math.max(8, r.left + r.width/2 - pw/2 + window.scrollX), vw - pw - 8 + window.scrollX);
+    pop.style.left = left + 'px';
+    pop.style.top = (r.bottom + window.scrollY + 6) + 'px';
+  }
+  function hidePop(){ pop.hidden = true; }
+
+  /* sheet */
+  var sheet = document.getElementById('sheet'), sheetInner = document.getElementById('sheetInner');
+  function openSheet(i){
+    hidePop();
+    selectSeg(i);
+    var m = META[i], sec = SECTIONS[sectionOf(i)];
+    var words = segWords(i).map(function(g){ return '<span><b>'+esc(GLOSS[g].k)+'</b> = '+esc(GLOSS[g].m)+'</span>'; }).join('');
+    sheetInner.innerHTML =
+      '<div class="grab"><div><span class="chip">קטע '+(i+1)+' מתוך '+N+'</span> <span class="chip gold">'+esc(m.r || m.label)+'</span></div><button class="x" type="button" id="sheetX" aria-label="סגירה">✕</button></div>'+
+      '<p class="muted" style="font-size:14px">'+esc(sec.t)+'</p>'+
+      '<p class="sgtext">'+segHTML(i)+'</p>'+
+      (words ? '<div class="words">'+words+'</div>' : '')+
+      '<details open><summary>רש"י ('+D.rashi[i].length+')</summary><div class="ctext">'+(commHTML(D.rashi[i], i) || '<p class="cempty">אין רש"י על הקטע הזה.</p>')+'</div></details>'+
+      '<details><summary>ביאור שטיינזלץ</summary><div class="stz">'+(D.steinsaltz[i] || '')+'</div></details>'+
+      (D.tosafot[i].length ? '<details><summary>תוספות ('+D.tosafot[i].length+'), למתקדמים</summary><div class="ctext">'+commHTML(D.tosafot[i], i)+'</div></details>' : '')+
+      '<button class="btn" type="button" id="sheetLearn">ללמוד את הקטע הזה במצב מודרך</button>';
+    sheet.hidden = false;
+    sheet.scrollTop = 0;
+    document.getElementById('sheetX').onclick = function(){ closeSheet(); };
+    document.getElementById('sheetLearn').onclick = function(){ cur = i; store.set('cur', cur); renderGuide(); showTab('tab-learn'); window.scrollTo({top:0}); };
+  }
+  function closeSheet(){ sheet.hidden = true; selectSeg(null); }
+
+  document.addEventListener('click', function(e){
+    var w = e.target.closest('.w');
+    if (w){ showPop(w); return; }
+    if (!e.target.closest('#pop')) hidePop();
+    var s = e.target.closest('.seg');
+    if (s){ openSheet(+s.dataset.i); return; }
+    var c = e.target.closest('#daf .ctext p[data-seg]');
+    if (c){ openSheet(+c.dataset.seg); }
+  });
+  document.addEventListener('keydown', function(e){
+    if (e.key === 'Escape'){ hidePop(); closeSheet(); }
+    if ((e.key === 'Enter' || e.key === ' ') && e.target.classList){
+      if (e.target.classList.contains('w')){ e.preventDefault(); showPop(e.target); }
+      else if (e.target.classList.contains('seg')){ e.preventDefault(); openSheet(+e.target.dataset.i); }
+    }
+  });
+
+  /* ---- GUIDED ---- */
+  var guide = document.getElementById('guide');
+  function markDone(i, on){
+    var k = done.indexOf(i);
+    if (on && k === -1) done.push(i);
+    if (!on && k > -1) done.splice(k, 1);
+    store.set('done', done);
+  }
+  function renderNav(){
+    var cs = sectionOf(cur);
+    document.getElementById('secBtns').innerHTML = SECTIONS.map(function(s, k){
+      var n = 0; for (var i = s.from; i <= s.to; i++) if (done.indexOf(i) > -1) n++;
+      return '<button type="button" data-s="'+k+'" class="'+(k===cs?'on':'')+'">'+esc(s.t)+' · '+n+'/'+(s.to-s.from+1)+'</button>';
+    }).join('');
+    var s = SECTIONS[cs], h = '';
+    for (var i = s.from; i <= s.to; i++) h += '<button type="button" data-i="'+i+'" class="'+(i===cur?'cur ':'')+(done.indexOf(i)>-1?'done':'')+'" aria-label="קטע '+(i+1)+'">'+(i+1)+'</button>';
+    document.getElementById('segNav').innerHTML = h;
+  }
+  document.getElementById('secBtns').addEventListener('click', function(e){ var b = e.target.closest('button'); if (!b) return; cur = SECTIONS[+b.dataset.s].from; store.set('cur', cur); renderGuide(); });
+  document.getElementById('segNav').addEventListener('click', function(e){ var b = e.target.closest('button'); if (!b) return; cur = +b.dataset.i; store.set('cur', cur); renderGuide(); });
+
+  function renderGuide(){
+    renderNav();
+    var i = cur, m = META[i], words = segWords(i), sec = SECTIONS[sectionOf(i)];
+    var quiz;
+    if (m.r){
+      var picked = answers[i];
+      quiz = '<div class="choices">'+ROLES.map(function(r){
+        var cls = picked ? (r === m.r ? 'right' : (r === picked ? 'wrong' : '')) : '';
+        return '<button type="button" data-role="'+r+'" class="'+cls+'"'+(picked?' disabled':'')+'>'+r+'</button>';
+      }).join('')+'</div>' + (picked ? '<p><span class="chip">'+m.r+'</span> '+esc(m.why)+'</p>' : '');
+    } else {
+      quiz = '<p><span class="chip gold">'+esc(m.label)+'</span></p><p class="hint">משימה: '+esc(m.task)+' ענו לעצמכם לפני שאתם פותחים את הביאור.</p>';
+    }
+    var isDone = done.indexOf(i) > -1;
+    guide.innerHTML =
+      '<div class="row"><span class="chip">קטע '+(i+1)+' מתוך '+N+' · '+esc(sec.t)+'</span>'+(isDone?'<span class="chip" style="background:var(--ok-soft);color:var(--ok)">סיימת ✓</span>':'')+'</div>'+
+      '<div class="step"><h3><span class="n">1</span>קריאה בקול</h3><p class="sgtext">'+segHTML(i)+'</p><p class="hint">קראו את הקטע פעמיים בקול. איפה נגמר כל משפט? איפה יש שאלה?</p></div>'+
+      '<div class="step"><h3><span class="n">2</span>מילים</h3>'+(words.length ? '<div class="words">'+words.map(function(g){ return '<span><b>'+esc(GLOSS[g].k)+'</b> = '+esc(GLOSS[g].m)+'</span>'; }).join('')+'</div>' : '<p class="hint">בקטע הזה אין מילים מסומנות. הוא כתוב בעברית של המשנה.</p>')+'</div>'+
+      '<div class="step"><h3><span class="n">3</span>'+(m.r ? 'איזה מהלך זה?' : 'מה יש כאן?')+'</h3>'+quiz+'</div>'+
+      '<div class="step"><h3><span class="n">4</span>רש"י</h3><div class="ctext">'+(commHTML(D.rashi[i], i) || '<p class="cempty">אין רש"י על הקטע הזה.</p>')+'</div></div>'+
+      '<div class="step"><h3><span class="n">5</span>ביאור</h3><details id="stzBox"><summary>פתחו את ביאור שטיינזלץ אחרי שניסיתם להבין לבד</summary><div class="stz">'+(D.steinsaltz[i]||'')+'</div></details>'+
+        (D.tosafot[i].length ? '<details><summary>תוספות על הקטע, למתקדמים</summary><div class="ctext">'+commHTML(D.tosafot[i], i)+'</div></details>' : '')+'</div>'+
+      '<div class="step"><h3><span class="n">6</span>סיכום במילים שלך</h3><label class="hint" for="note">מה נאמר כאן, ולמה? (נשמר בדפדפן הזה)</label><textarea id="note">'+esc(notes[i]||'')+'</textarea></div>'+
+      '<div class="step"><h3><span class="n">7</span>סיום</h3>'+(sec.more && i === sec.to ? '<p class="hint">'+esc(sec.more)+'</p>' : '')+
+        '<div class="row"><button class="btn ghost" type="button" id="gPrev"'+(i===0?' disabled':'')+'>הקטע הקודם</button>'+
+        '<button class="btn" type="button" id="gDone">'+(isDone ? 'לקטע הבא' : 'סיימתי, לקטע הבא')+'</button></div></div>';
+
+    guide.querySelectorAll('[data-role]').forEach(function(b){
+      b.addEventListener('click', function(){ answers[i] = b.dataset.role; store.set('answers', answers); renderGuide(); });
+    });
+    document.getElementById('note').addEventListener('input', function(e){ notes[i] = e.target.value; store.set('notes', notes); });
+    document.getElementById('gPrev').onclick = function(){ cur = Math.max(0, i-1); store.set('cur', cur); renderGuide(); window.scrollTo({top:0}); };
+    document.getElementById('gDone').onclick = function(){
+      markDone(i, true); renderDaf();
+      cur = Math.min(N-1, i+1); store.set('cur', cur); renderGuide(); window.scrollTo({top:0});
+    };
+  }
+
+  /* ---- WORDS ---- */
+  var OCC = GLOSS.map(function(_, g){ for (var i = 0; i < N; i++) if (segWords(i).indexOf(g) > -1) return i; return -1; });
+  var known = store.get('known', []);
+  function shuffle(a){ for (var i=a.length-1;i>0;i--){ var j=Math.floor(Math.random()*(i+1)); var t=a[i];a[i]=a[j];a[j]=t; } return a; }
+  function queue(){ var all = GLOSS.map(function(_, i){ return i; }); var q = all.filter(function(i){ return known.indexOf(i) === -1; }); return shuffle(q.length ? q : all); }
+  var Q = queue(), qi = 0, flipped = false;
+  var flash = document.getElementById('flash');
+  function ctxHTML(g){
+    var i = OCC[g]; if (i < 0) return '';
+    return MATCH[i].map(function(p){ return p.g === g ? '<mark>'+esc(p.t)+'</mark>' : esc(p.t); }).join(' ');
+  }
+  function renderFlash(){
+    var g = Q[qi % Q.length], e = GLOSS[g];
+    flash.innerHTML = '<span class="term">'+esc(e.k)+'</span>' + (flipped
+      ? '<span class="mean">'+esc(e.m)+'</span><span class="ctx">'+ctxHTML(g)+'</span><span class="hint">קטע '+(OCC[g]+1)+' בדף · '+(e.s?'שטיינזלץ':'הסבר הכלי')+'</span>'
+      : '<span class="ctx">'+ctxHTML(g)+'</span><span class="hint">לחצו כדי לראות את הפירוש</span>');
+    document.getElementById('knownCount').textContent = 'יודע ' + known.length + ' מתוך ' + GLOSS.length;
+    document.getElementById('knownBar').style.width = (known.length / GLOSS.length * 100) + '%';
+  }
+  function nextCard(ok){
+    var g = Q[qi % Q.length], k = known.indexOf(g);
+    if (ok && k === -1) known.push(g);
+    if (!ok && k > -1) known.splice(k, 1);
+    store.set('known', known);
+    qi++; flipped = false;
+    if (qi >= Q.length){ Q = queue(); qi = 0; }
+    renderFlash(); renderGloss();
+  }
+  flash.addEventListener('click', function(){ flipped = !flipped; renderFlash(); });
+  document.getElementById('fYes').addEventListener('click', function(){ nextCard(true); });
+  document.getElementById('fNo').addEventListener('click', function(){ nextCard(false); });
+  var gloss = document.getElementById('gloss');
+  function renderGloss(){
+    gloss.innerHTML = GLOSS.map(function(e, g){
+      return '<div'+(known.indexOf(g)>-1?' class="known"':'')+'><dt>'+esc(e.k)+'</dt><dd>'+esc(e.m)+'<small>'+(e.s?'שטיינזלץ':'הסבר הכלי')+' · <button type="button" data-open="'+OCC[g]+'">קטע '+(OCC[g]+1)+' בדף</button></small></dd></div>';
+    }).join('');
+  }
+  gloss.addEventListener('click', function(e){ var b = e.target.closest('[data-open]'); if (!b) return; showTab('tab-daf'); openSheet(+b.dataset.open); });
+
+  /* ---- HOW ---- */
+  var MOVES = [
+    ['שאלה', 'בקשה להבין: מה המקור? מה המקרה? ("מאי", "ממאי", "היכא קאי")'],
+    ['קושיא', 'הצבעה על בעיה: סתירה, ניסוח מוזר או דבר מיותר ("ותו", "לתני", "אי הכי")'],
+    ['תירוץ', 'תשובה שמיישבת את הקושיא ("תנא אקרא קאי")'],
+    ['תירוץ נוסף', 'תשובה חלופית ("ואי בעית אימא")'],
+    ['ראיה', 'הבאת מקור: פסוק ("דכתיב") או ברייתא ("כדתניא")']
+  ];
+  document.getElementById('moves').innerHTML = MOVES.map(function(m){ return '<div class="move"><b>'+m[0]+'</b><span>'+m[1]+'</span></div>'; }).join('');
+  var S = D.sources;
+  document.getElementById('srcList').innerHTML =
+    'משנה וגמרא: '+esc(S.gemara[0])+' ('+esc(S.gemara[1])+'). רש"י ותוספות: '+esc(S.rashi[0])+' ('+esc(S.rashi[1])+'). ביאור: '+esc(S.steinsaltz[0])+', ביאור הרב עדין שטיינזלץ, הוצאת קורן ('+esc(S.steinsaltz[1])+'). כל הטקסטים נלקחו מ<a href="https://www.sefaria.org/'+esc(D.ref)+'" target="_blank" rel="noopener">ספריא</a>.';
+
+  renderDaf(); renderGuide(); renderFlash(); renderGloss();
+  var saved = null; try{ saved = localStorage.getItem('daf:tab'); }catch(e){}
+  var hashMap = {daf:'tab-daf', learn:'tab-learn', words:'tab-words', how:'tab-how'};
+  var start = hashMap[location.hash.slice(1)] || saved;
+  if (start && document.getElementById(start)) showTab(start);
+})();
+</script>
