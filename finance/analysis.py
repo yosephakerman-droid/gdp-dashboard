@@ -38,7 +38,7 @@ def prepare_transactions(tx: pd.DataFrame) -> pd.DataFrame:
         guess_category(d, a) for d, a in zip(df.loc[missing, "description"], df.loc[missing, "amount"])
     ]
     df["month"] = df["date"].dt.to_period("M").dt.to_timestamp()
-    return assign_kinds(df.sort_values("date").reset_index(drop=True))
+    return assign_kinds(df.sort_values("date", kind="stable").reset_index(drop=True))
 
 
 def assign_kinds(df: pd.DataFrame) -> pd.DataFrame:

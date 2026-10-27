@@ -1,13 +1,19 @@
 """Personal finance dashboard: cash flow, breakdowns, savings and suggestions."""
 
+import hashlib
+import json
+from dataclasses import asdict
+
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
+from streamlit_js_eval import streamlit_js_eval
 
 from finance import analysis as A
 from finance import loader as L
 from finance import recommendations as R
 from finance import schema as S
+from finance import store as STORE
 
 st.set_page_config(page_title="ניתוח פיננסי אישי", page_icon=":bar_chart:", layout="wide")
 
@@ -60,127 +66,300 @@ def month_label(ts) -> str:
     return pd.Timestamp(ts).strftime("%m/%Y")
 
 
+# --- Saved data ----------------------------------------------------------------
+# "My data" lives in session state and is mirrored to the browser's
+# localStorage, so it survives a refresh and never leaves the viewer's device
+# (Streamlit's server only holds it in memory while the page is open).
+
+SAMPLE, MINE = "נתוני דוגמה (פיקטיביים)", "הנתונים שלי"
+STORAGE_KEY = "personal-finance-dashboard"
+ss = st.session_state
+ss.setdefault("ingested", set())
+ss.setdefault("upload_log", [])
+
+SETTING_FIELDS = [  # field, label, min, max, step, kind
+    ("age", "גיל", 18, 90, 1, "number"),
+    ("retirement_age", "גיל פרישה מתוכנן", 50, 90, 1, "number"),
+    ("emergency_months", "קרן חירום (חודשי הוצאה)", 1.0, 12.0, 0.5, "slider"),
+    ("savings_rate_target", "יעד שיעור חיסכון", 0.0, 0.5, 0.01, "slider"),
+    ("max_pension_fee_balance", "סף דמי ניהול פנסיה/גמל מצבירה %", 0.0, 2.0, 0.05, "number"),
+    ("max_pension_fee_deposit", "סף דמי ניהול פנסיה מהפקדה %", 0.0, 6.0, 0.1, "number"),
+    ("max_hishtalmut_fee", "סף דמי ניהול קרן השתלמות %", 0.0, 2.0, 0.05, "number"),
+    ("max_investment_fee", "סף דמי ניהול תיק השקעות %", 0.0, 2.0, 0.05, "number"),
+    ("expected_return", "תשואה שנתית צפויה לתחזיות %", 0.0, 15.0, 0.5, "number"),
+]
+for field, *_ in SETTING_FIELDS:
+    ss.setdefault(f"cfg_{field}", getattr(R.Settings(), field))
+
+
+def apply_settings(saved: dict):
+    for field, _, lo, hi, _, _ in SETTING_FIELDS:
+        v = saved.get(field)
+        if isinstance(v, (int, float)) and lo <= v <= hi:
+            ss[f"cfg_{field}"] = type(getattr(R.Settings(), field))(v)
+
+
+def get_store(name: str) -> dict:
+    if name not in ss:
+        if name == SAMPLE:
+            tx, a = L.load_sample()
+            ss[name] = {"tx": STORE.clean_transactions(tx), "assets": STORE.clean_assets(a), "ver": 0}
+        else:
+            ss[name] = {"tx": STORE.empty_transactions(), "assets": STORE.empty_assets(), "ver": 0}
+    return ss[name]
+
+
+def load_from_browser(store: dict):
+    """Read saved data once per session. The first call returns None while the
+    browser answers; the component then reruns the script with the value."""
+    if ss.get("browser_loaded"):
+        return
+    raw = streamlit_js_eval(js_expressions=f"localStorage.getItem('{STORAGE_KEY}') ?? ''", key="ls_load")
+    if raw is None:
+        st.caption("טוען נתונים שמורים מהדפדפן…")
+        return
+    ss.browser_loaded = True
+    ss.saved_json = raw
+    if raw:
+        try:
+            store["tx"], store["assets"], saved_cfg = STORE.from_json(raw)
+            apply_settings(saved_cfg)
+            store["ver"] += 1
+        except ValueError:
+            ss.upload_log = [("error", "הנתונים השמורים בדפדפן לא נקראו. אפשר לשחזר מקובץ גיבוי.")]
+
+
+def save_to_browser(store: dict, cfg: R.Settings):
+    if not ss.get("browser_loaded"):
+        return  # never overwrite saved data before it was read
+    payload = STORE.to_json(store["tx"], store["assets"], asdict(cfg))
+    if payload == ss.get("saved_json"):
+        return
+    digest = hashlib.md5(payload.encode()).hexdigest()[:12]
+    streamlit_js_eval(js_expressions=f"localStorage.setItem('{STORAGE_KEY}', {json.dumps(payload)}); true",
+                      key=f"ls_save_{digest}")
+    ss.saved_json = payload
+
+
+def ingest_uploads(store: dict, bank_files, credit_files, assets_file, backup_file):
+    """Add each uploaded file to the saved data once."""
+    new_log = []
+    for files, source in ((bank_files, S.ACCOUNT_BANK), (credit_files, S.ACCOUNT_CREDIT)):
+        for f in files or []:
+            if f.file_id in ss.ingested:
+                continue
+            ss.ingested.add(f.file_id)
+            try:
+                store["tx"], added = STORE.merge_transactions(store["tx"], L.read_transactions(f, f.name, source))
+                new_log.append(("success", f"{f.name}: נוספו {added} תנועות"
+                                + ("" if added else " (כולן כבר שמורות)")))
+            except Exception as e:  # show the problem, keep going with other files
+                new_log.append(("error", f"{f.name}: {e}"))
+    if assets_file and assets_file.file_id not in ss.ingested:
+        ss.ingested.add(assets_file.file_id)
+        try:
+            new_assets = L.read_assets(assets_file, assets_file.name)
+            store["assets"] = STORE.merge_assets(store["assets"], new_assets)
+            new_log.append(("success", f"{assets_file.name}: עודכנו {len(new_assets)} נכסים"))
+        except Exception as e:
+            new_log.append(("error", f"{assets_file.name}: {e}"))
+    if backup_file and backup_file.file_id not in ss.ingested:
+        ss.ingested.add(backup_file.file_id)
+        try:
+            store["tx"], store["assets"], saved_cfg = STORE.from_json(backup_file.getvalue().decode("utf-8"))
+            apply_settings(saved_cfg)
+            new_log.append(("success", "הגיבוי שוחזר"))
+        except (ValueError, UnicodeDecodeError) as e:
+            new_log.append(("error", f"{backup_file.name}: {e}"))
+    if new_log:
+        store["ver"] += 1
+        ss.upload_log = new_log
+
+
+def editor_changed(key: str) -> bool:
+    state = ss.get(key) or {}
+    return any(state.get(k) for k in ("edited_rows", "added_rows", "deleted_rows"))
+
+
 # --- Sidebar: data and settings ---------------------------------------------
 
 with st.sidebar:
     st.header("נתונים")
-    mode = st.radio("מקור", ["נתוני דוגמה (פיקטיביים)", "הקבצים שלי"], label_visibility="collapsed")
+    mode = st.radio("מקור", [MINE, SAMPLE], label_visibility="collapsed", key="mode")
+    store = get_store(mode)
 
-    tx_parts, assets = [], pd.DataFrame(columns=S.ASSET_COLUMNS)
-    errors = []
-    if mode.startswith("נתוני דוגמה"):
-        sample_tx, assets = L.load_sample()
-        tx_parts.append(sample_tx)
-        st.caption("כל הנתונים במצב זה מומצאים, להמחשה בלבד.")
+    if mode == SAMPLE:
+        st.caption("כל הנתונים במצב זה מומצאים, להמחשה בלבד. שינויים כאן אינם נשמרים.")
     else:
+        load_from_browser(store)
+        st.caption("הנתונים נשמרים בדפדפן במכשיר הזה בלבד ונשארים אחרי רענון. "
+                   "קבצים חדשים מתווספים לשמורים; תנועה שכבר קיימת לא תיכנס פעמיים.")
         bank_files = st.file_uploader('קובצי עו"ש (CSV / Excel)', type=["csv", "xlsx", "xls"],
                                       accept_multiple_files=True)
         credit_files = st.file_uploader("קובצי כרטיסי אשראי", type=["csv", "xlsx", "xls"],
                                         accept_multiple_files=True,
                                         help="חיובים מופיעים בקובץ כמספר חיובי; המערכת הופכת אותם להוצאה.")
         assets_file = st.file_uploader("נכסים, חסכונות והלוואות", type=["csv", "xlsx", "xls"],
-                                       help="פנסיה, קרן השתלמות, גמל, תיק השקעות, פיקדונות, עו\"ש והלוואות.")
-        for files, source in ((bank_files, S.ACCOUNT_BANK), (credit_files, S.ACCOUNT_CREDIT)):
-            for f in files or []:
-                try:
-                    tx_parts.append(L.read_transactions(f, f.name, source))
-                except Exception as e:  # show the problem, keep going with other files
-                    errors.append(f"{f.name}: {e}")
-        if assets_file:
-            try:
-                assets = L.read_assets(assets_file, assets_file.name)
-            except Exception as e:
-                errors.append(f"{assets_file.name}: {e}")
+                                       help="נכס עם שם שכבר קיים יתעדכן; נכס חדש יתווסף.")
+        with st.expander("גיבוי, שחזור ומחיקה", key="exp_backup"):
+            st.caption("קובץ גיבוי מאפשר להעביר את הנתונים למכשיר או לדפדפן אחר.")
+            backup_file = st.file_uploader("שחזור מקובץ גיבוי (מחליף את הנתונים השמורים)", type=["json"])
+            ingest_uploads(store, bank_files, credit_files, assets_file, backup_file)
+            st.download_button("הורדת קובץ גיבוי",
+                               STORE.to_json(store["tx"], store["assets"],
+                                             {f: ss[f"cfg_{f}"] for f, *_ in SETTING_FIELDS}).encode("utf-8"),
+                               "finance_backup.json", "application/json", on_click="ignore")
+            confirm = st.checkbox("אני רוצה למחוק את כל הנתונים השמורים")
+            if st.button("מחיקת כל הנתונים", disabled=not confirm, type="primary"):
+                store.update(tx=STORE.empty_transactions(), assets=STORE.empty_assets(), ver=store["ver"] + 1)
+                ss.upload_log = [("success", "כל הנתונים נמחקו")]
+        for level, msg in ss.upload_log:
+            (st.success if level == "success" else st.error)(msg)
         c1, c2 = st.columns(2)
-        c1.download_button("תבנית תנועות", L.template_transactions_csv(), "transactions_template.csv", "text/csv")
-        c2.download_button("תבנית נכסים", L.template_assets_csv(), "assets_template.csv", "text/csv")
-        st.caption("הקבצים מעובדים בזיכרון בזמן הריצה ואינם נשמרים בשרת.")
-    for e in errors:
-        st.error(e)
+        c1.download_button("תבנית תנועות", L.template_transactions_csv(), "transactions_template.csv", "text/csv", on_click="ignore")
+        c2.download_button("תבנית נכסים", L.template_assets_csv(), "assets_template.csv", "text/csv", on_click="ignore")
 
     st.header("הגדרות")
-    with st.expander("פרופיל וספים להמלצות"):
+    with st.expander("פרופיל וספים להמלצות", key="exp_settings"):
         st.caption("ברירות המחדל הן כללי אצבע שבחרתי, לא נתון רשמי. שנה לפי שיקול דעתך.")
-        cfg = R.Settings(
-            age=st.number_input("גיל", 18, 90, 35),
-            retirement_age=st.number_input("גיל פרישה מתוכנן", 50, 90, 67),
-            emergency_months=st.slider("קרן חירום (חודשי הוצאה)", 1.0, 12.0, 6.0, 0.5),
-            savings_rate_target=st.slider("יעד שיעור חיסכון", 0.0, 0.5, 0.15, 0.01, format="%.2f"),
-            max_pension_fee_balance=st.number_input("סף דמי ניהול פנסיה/גמל מצבירה %", 0.0, 2.0, 0.3, 0.05),
-            max_pension_fee_deposit=st.number_input("סף דמי ניהול פנסיה מהפקדה %", 0.0, 6.0, 2.0, 0.1),
-            max_hishtalmut_fee=st.number_input("סף דמי ניהול קרן השתלמות %", 0.0, 2.0, 0.7, 0.05),
-            max_investment_fee=st.number_input("סף דמי ניהול תיק השקעות %", 0.0, 2.0, 0.5, 0.05),
-            expected_return=st.number_input("תשואה שנתית צפויה לתחזיות %", 0.0, 15.0, 5.0, 0.5),
-        )
-
-base_tx = pd.concat(tx_parts, ignore_index=True) if tx_parts else pd.DataFrame(columns=S.TX_COLUMNS)
+        for field, label, lo, hi, step, kind in SETTING_FIELDS:
+            widget = st.slider if kind == "slider" else st.number_input
+            widget(label, min_value=lo, max_value=hi, step=step, key=f"cfg_{field}")
+        cfg = R.Settings(**{f: ss[f"cfg_{f}"] for f, *_ in SETTING_FIELDS})
 
 st.title("ניתוח פיננסי אישי")
-if base_tx.empty and assets.empty:
-    st.info("העלה קובצי עו\"ש, אשראי ונכסים בסרגל הצדדי, או בחר 'נתוני דוגמה' כדי לראות את המערכת.")
-    st.stop()
-
-# Editor state is tied to the loaded data, so edits never apply to other files.
-data_sig = f"{mode}-{len(base_tx)}-{pd.util.hash_pandas_object(base_tx.astype(str), index=False).sum() if len(base_tx) else 0}"
-prepared = A.prepare_transactions(base_tx) if not base_tx.empty else base_tx.assign(kind=None, month=None)
-
 tabs = st.tabs(["סקירה", "הכנסות מול הוצאות", "פילוחים", "נכסים וחיסכון", "המלצות", "נתונים ועריכה"])
 
 # --- Data tab first, so edits apply to every other tab -----------------------
 
+AUTO_CATEGORY = "סיווג אוטומטי"
+
 with tabs[5]:
     st.subheader("תנועות")
-    st.caption("אפשר לשנות קטגוריה בכל שורה; השינוי מתעדכן בכל הלשוניות (עד רענון הדף).")
-    view_cols = ["date", "description", "amount", "account", "category", "kind"]
-    edited = st.data_editor(
-        prepared[view_cols] if not prepared.empty else prepared,
-        key=f"tx_editor-{data_sig}",
-        hide_index=True,
-        width="stretch",
-        disabled=["date", "description", "amount", "account", "kind"],
-        column_config={
-            "date": st.column_config.DateColumn(S.TX_LABELS["date"], format="DD/MM/YYYY"),
-            "description": S.TX_LABELS["description"],
-            "amount": st.column_config.NumberColumn(S.TX_LABELS["amount"], format="localized"),
-            "account": S.TX_LABELS["account"],
-            "category": st.column_config.SelectboxColumn(
-                S.TX_LABELS["category"],
-                options=sorted(set(S.ALL_CATEGORIES) | set(prepared.get("category", pd.Series()).dropna())),
-                required=True,
-            ),
-            "kind": S.TX_LABELS["kind"],
-        },
-    )
-    st.subheader("נכסים, חסכונות והלוואות")
-    st.caption("אפשר להוסיף, למחוק ולערוך שורות. בהלוואה: 'יתרה' = יתרת החוב, 'תשואה/ריבית' = ריבית ההלוואה.")
-    assets = st.data_editor(
-        assets,
-        key=f"assets_editor-{data_sig}-{len(assets)}",
+    with st.expander("➕ הוספת תנועה", key="exp_add_tx"):
+        with st.form("add_tx", clear_on_submit=True):
+            c1, c2 = st.columns(2)
+            f_date = c1.date_input("תאריך", value="today", format="DD/MM/YYYY")
+            f_kind = c2.radio("סוג", ["הוצאה", "הכנסה"], horizontal=True)
+            f_desc = st.text_input("תיאור", placeholder="למשל: שופרסל, משכורת")
+            c1, c2 = st.columns(2)
+            f_amount = c1.number_input("סכום (₪)", min_value=0.0, step=10.0, format="%.2f")
+            f_account = c2.selectbox("חשבון", [S.ACCOUNT_BANK, S.ACCOUNT_CREDIT])
+            f_cat = st.selectbox("קטגוריה", [AUTO_CATEGORY] + S.ALL_CATEGORIES)
+            if st.form_submit_button("הוספה", type="primary"):
+                if not f_desc.strip() or f_amount <= 0:
+                    st.error("צריך תיאור וסכום גדול מאפס.")
+                else:
+                    row = pd.DataFrame([[pd.Timestamp(f_date), f_desc.strip(),
+                                         -f_amount if f_kind == "הוצאה" else f_amount, f_account,
+                                         None if f_cat == AUTO_CATEGORY else f_cat]], columns=S.TX_COLUMNS)
+                    store.update(tx=STORE.clean_transactions(pd.concat([store["tx"], row], ignore_index=True)),
+                                 ver=store["ver"] + 1)
+                    st.toast("התנועה נוספה")
+    st.caption("עריכה: לחיצה כפולה על תא. מחיקה: סימון השורה בצד ובסמל הפח. "
+               "קטגוריה ריקה תסווג אוטומטית. בהוצאה הסכום שלילי.")
+    tx_key = f"tx_editor-{mode}-{store['ver']}"
+    tx_edit = st.data_editor(
+        store["tx"],
+        key=tx_key,
         num_rows="dynamic",
         hide_index=True,
         width="stretch",
         column_config={
-            "name": S.ASSET_LABELS["name"],
+            "date": st.column_config.DateColumn(S.TX_LABELS["date"], format="DD/MM/YYYY", required=True),
+            "description": st.column_config.TextColumn(S.TX_LABELS["description"], required=True),
+            "amount": st.column_config.NumberColumn(S.TX_LABELS["amount"], format="localized", required=True),
+            "account": st.column_config.SelectboxColumn(S.TX_LABELS["account"],
+                                                        options=[S.ACCOUNT_BANK, S.ACCOUNT_CREDIT],
+                                                        default=S.ACCOUNT_BANK),
+            "category": st.column_config.SelectboxColumn(
+                S.TX_LABELS["category"],
+                options=sorted(set(S.ALL_CATEGORIES) | set(store["tx"]["category"].dropna())),
+            ),
+        },
+    )
+    if editor_changed(tx_key):
+        incomplete = (tx_edit["date"].isna() | tx_edit["amount"].isna()
+                      | tx_edit["description"].fillna("").astype(str).str.strip().eq(""))
+        if incomplete.any():
+            st.caption("השלם תאריך, תיאור וסכום בשורה כדי לשמור.")
+        else:
+            store.update(tx=STORE.clean_transactions(tx_edit), ver=store["ver"] + 1)
+            st.rerun()
+
+    st.subheader("נכסים, חסכונות והלוואות")
+    with st.expander("➕ הוספת נכס או הלוואה", key="exp_add_asset"):
+        with st.form("add_asset", clear_on_submit=True):
+            c1, c2 = st.columns(2)
+            a_name = c1.text_input("שם", placeholder="למשל: פנסיה מקיפה")
+            a_type = c2.selectbox("סוג", S.ASSET_TYPES)
+            a_provider = st.text_input("גוף מנהל (לא חובה)")
+            c1, c2 = st.columns(2)
+            a_balance = c1.number_input("יתרה (₪) – בהלוואה: יתרת החוב", min_value=0.0, step=1000.0)
+            a_deposit = c2.number_input("הפקדה חודשית (₪)", min_value=0.0, step=100.0)
+            c1, c2, c3 = st.columns(3)
+            a_fee_bal = c1.number_input("דמי ניהול מצבירה %", min_value=0.0, max_value=5.0, step=0.05)
+            a_fee_dep = c2.number_input("דמי ניהול מהפקדה %", min_value=0.0, max_value=10.0, step=0.1)
+            a_return = c3.number_input("תשואה / ריבית %", min_value=0.0, max_value=30.0, step=0.5)
+            a_liq = st.date_input("תאריך נזילות (לקרן השתלמות, לא חובה)", value=None, format="DD/MM/YYYY")
+            if st.form_submit_button("הוספה", type="primary"):
+                if not a_name.strip():
+                    st.error("צריך שם.")
+                else:
+                    row = pd.DataFrame([[a_name.strip(), a_type, a_provider, a_balance, a_deposit, a_fee_bal,
+                                         a_fee_dep, a_return, a_liq]], columns=S.ASSET_COLUMNS)
+                    store.update(assets=STORE.merge_assets(store["assets"], row), ver=store["ver"] + 1)
+                    st.toast("הנכס נשמר (נכס בשם זהה מתעדכן)")
+    st.caption("עריכה: לחיצה כפולה על תא. מחיקה: סימון השורה בצד ובסמל הפח. "
+               "בהלוואה: 'יתרה' = יתרת החוב, 'תשואה/ריבית' = ריבית ההלוואה.")
+    assets_key = f"assets_editor-{mode}-{store['ver']}"
+    assets_edit = st.data_editor(
+        store["assets"],
+        key=assets_key,
+        num_rows="dynamic",
+        hide_index=True,
+        width="stretch",
+        column_config={
+            "name": st.column_config.TextColumn(S.ASSET_LABELS["name"], required=True),
             "type": st.column_config.SelectboxColumn(S.ASSET_LABELS["type"], options=S.ASSET_TYPES, required=True),
             "provider": S.ASSET_LABELS["provider"],
-            "balance": st.column_config.NumberColumn(S.ASSET_LABELS["balance"], format="localized"),
-            "monthly_deposit": st.column_config.NumberColumn(S.ASSET_LABELS["monthly_deposit"], format="localized"),
-            "fee_balance_pct": st.column_config.NumberColumn(S.ASSET_LABELS["fee_balance_pct"], format="%.2f"),
-            "fee_deposit_pct": st.column_config.NumberColumn(S.ASSET_LABELS["fee_deposit_pct"], format="%.2f"),
-            "annual_return_pct": st.column_config.NumberColumn(S.ASSET_LABELS["annual_return_pct"], format="%.2f"),
+            "balance": st.column_config.NumberColumn(S.ASSET_LABELS["balance"], format="localized", default=0),
+            "monthly_deposit": st.column_config.NumberColumn(S.ASSET_LABELS["monthly_deposit"], format="localized",
+                                                             default=0),
+            "fee_balance_pct": st.column_config.NumberColumn(S.ASSET_LABELS["fee_balance_pct"], format="%.2f",
+                                                             default=0),
+            "fee_deposit_pct": st.column_config.NumberColumn(S.ASSET_LABELS["fee_deposit_pct"], format="%.2f",
+                                                             default=0),
+            "annual_return_pct": st.column_config.NumberColumn(S.ASSET_LABELS["annual_return_pct"], format="%.2f",
+                                                               default=0),
             "liquidity_date": st.column_config.DateColumn(S.ASSET_LABELS["liquidity_date"], format="DD/MM/YYYY"),
         },
     )
-    assets = L.normalize_assets(assets) if len(assets) else assets
+    if editor_changed(assets_key):
+        incomplete = assets_edit["name"].fillna("").astype(str).str.strip().eq("") | assets_edit["type"].isna()
+        if incomplete.any():
+            st.caption("השלם שם וסוג בשורה כדי לשמור.")
+        else:
+            store.update(assets=STORE.clean_assets(assets_edit), ver=store["ver"] + 1)
+            st.rerun()
 
-all_tx = prepared.copy()
-if not all_tx.empty:
-    all_tx["category"] = edited["category"].values
-    all_tx = A.assign_kinds(all_tx)
+assets = store["assets"]
+if store["tx"].empty:
+    all_tx = STORE.empty_transactions().assign(kind=pd.Series(dtype=object), month=pd.Series(dtype="datetime64[ns]"))
+else:
+    all_tx = A.prepare_transactions(store["tx"])
     export = all_tx[["date", "description", "amount", "account", "category", "kind"]].rename(columns=S.TX_LABELS)
     with tabs[5]:
         st.download_button("הורדת התנועות המסווגות (CSV)", export.to_csv(index=False).encode("utf-8-sig"),
-                           "categorized_transactions.csv", "text/csv")
+                           "categorized_transactions.csv", "text/csv", on_click="ignore")
+
+if mode == MINE:
+    save_to_browser(store, cfg)
+
+if all_tx.empty and assets.empty:
+    with tabs[0]:
+        st.info("אין עדיין נתונים. אפשר להעלות קובצי עו\"ש, אשראי ונכסים בסרגל הצדדי, "
+                "להוסיף ידנית בלשונית 'נתונים ועריכה', או לבחור 'נתוני דוגמה' כדי לראות את המערכת.")
 
 # --- Period filter ------------------------------------------------------------
 
