@@ -132,3 +132,23 @@ def test_overspending_is_critical():
     ]))
     recs = R.build(df, pd.DataFrame(columns=S.ASSET_COLUMNS), R.Settings(), pd.Timestamp("2026-10-27"))
     assert recs[0].severity == R.CRITICAL
+
+
+def test_fee_impact_uses_expected_return_when_product_return_unknown():
+    assets = L.normalize_assets(pd.DataFrame([
+        ["פוליסה", S.ASSET_POLICY, "", 100000, 500, 0.9, 0, 0, ""],
+    ], columns=S.ASSET_COLUMNS))
+    row = assets.iloc[0]
+    zero = A.fee_impact(row, 27, 0.3, 2.0)
+    with_return = A.fee_impact(R._with_return(row, 5.0), 27, 0.3, 2.0)
+    assert with_return > zero > 0
+
+
+def test_no_bank_fee_rec_when_fees_net_to_zero():
+    df = A.prepare_transactions(_tx([
+        ["2026-09-01", "משכורת", 10000, S.ACCOUNT_BANK, None],
+        ["2026-09-04", "עמלות תקופתיות/דמי ניהול חשבון", -4, S.ACCOUNT_BANK, None],
+        ["2026-09-04", "החזר דמי ניהול חשבון", 4, S.ACCOUNT_BANK, None],
+    ]))
+    recs = R.build(df, pd.DataFrame(columns=S.ASSET_COLUMNS), R.Settings(), pd.Timestamp("2026-10-27"))
+    assert "עמלות וריביות בנק" not in [r.title for r in recs]
