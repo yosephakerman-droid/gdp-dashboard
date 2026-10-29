@@ -38,19 +38,20 @@ def prepare_transactions(tx: pd.DataFrame) -> pd.DataFrame:
         guess_category(d, a) for d, a in zip(df.loc[missing, "description"], df.loc[missing, "amount"])
     ]
     df["month"] = df["date"].dt.to_period("M").dt.to_timestamp()
-    return assign_kinds(df.sort_values("date").reset_index(drop=True))
+    return assign_kinds(df.sort_values("date", kind="stable").reset_index(drop=True))
 
 
 def assign_kinds(df: pd.DataFrame) -> pd.DataFrame:
     """Set the kind column from category/account. Re-run after edits."""
     df = df.copy()
-    has_card_detail = (df["account"] == S.ACCOUNT_CREDIT).any()
+    month = df["date"].dt.to_period("M")
+    card_months = set(month[df["account"] == S.ACCOUNT_CREDIT])
 
     def kind(row) -> str:
         if row["category"] == S.CAT_CARD_BILL and row["account"] != S.ACCOUNT_CREDIT:
-            # The card's monthly total in the bank account duplicates the
-            # card's own line items, when those were uploaded.
-            return S.KIND_INTERNAL if has_card_detail else S.KIND_EXPENSE
+            # A card bill in the bank duplicates the card's own line items, but
+            # only in months whose card detail was uploaded.
+            return S.KIND_INTERNAL if row["date"].to_period("M") in card_months else S.KIND_EXPENSE
         if row["category"] == S.CAT_SAVINGS:
             return S.KIND_SAVING
         if row["category"] in INCOME_CATEGORIES:

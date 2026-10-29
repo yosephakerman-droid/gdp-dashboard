@@ -11,6 +11,7 @@ ASSET_INVESTMENTS = "השקעות"
 ASSET_HISHTALMUT = "קרן השתלמות"
 ASSET_PENSION = "פנסיה"
 ASSET_GEMEL = "קופת גמל"
+ASSET_POLICY = "פוליסת ביטוח/חיסכון"
 ASSET_LOAN = "הלוואה"
 
 ASSET_TYPES = [
@@ -20,11 +21,12 @@ ASSET_TYPES = [
     ASSET_HISHTALMUT,
     ASSET_PENSION,
     ASSET_GEMEL,
+    ASSET_POLICY,
     ASSET_LOAN,
 ]
 
 # Long-term savings products (pension-like).
-LONG_TERM_TYPES = [ASSET_PENSION, ASSET_GEMEL, ASSET_HISHTALMUT]
+LONG_TERM_TYPES = [ASSET_PENSION, ASSET_GEMEL, ASSET_POLICY, ASSET_HISHTALMUT]
 
 # --- Transaction columns -----------------------------------------------------
 TX_COLUMNS = ["date", "description", "amount", "account", "category"]
@@ -77,6 +79,10 @@ CAT_SAVINGS = "חיסכון והשקעות"
 CAT_CARD_BILL = "חיוב כרטיס אשראי"
 CAT_BANK_FEES = "עמלות וריביות בנק"
 CAT_SUBSCRIPTIONS = "מנויים"
+CAT_CARD_UNITEMIZED = "אשראי לא מפורט"
+CAT_DONATIONS = "תרומות"
+CAT_HOME = "בית ושיפוץ"
+CAT_TAXES = "מסים ואגרות"
 CAT_OTHER = "אחר"
 
 # Order matters: the first category whose keyword appears in the description
@@ -86,11 +92,12 @@ CATEGORY_KEYWORDS: list[tuple[str, list[str]]] = [
     (CAT_OTHER_INCOME, ["ביטוח לאומי", "ריבית זכות", "החזר מס", "דיבידנד"]),
     (CAT_BANK_FEES, ["ריבית חובה", "עמלת", "עמלה", "דמי ניהול חשבון", "דמי כרטיס"]),
     (CAT_CARD_BILL, ["ישראכרט", "כאל", "מקס איט", "max", "לאומי קארד", "אמריקן אקספרס",
-                     "דיינרס", "חיוב כרטיס", "ויזה"]),
+                     "דיינרס", "חיוב כרטיס", "ויזה", "כרטיסי אשראי לי", "פרימיום אקספרס"]),
     (CAT_SAVINGS, ["העברה להשקעות", "הפקדה לקרן", "הפקדה לפיקדון", "פיקדון",
-                   "קופת גמל להשקעה", "תיק השקעות", "ברוקר", "interactive", "אינטראקטיב"]),
-    ("דיור", ["שכר דירה", "שכירות", "משכנתא", "ארנונה", "ועד בית"]),
-    ("חשבונות בית", ["חברת חשמל", "חשמל", "תאגיד מים", "מקורות", "בזק", "פרטנר",
+                   "קופת גמל להשקעה", "תיק השקעות", "ברוקר", "interactive", "אינטראקטיב",
+                   "אקסלנס", "הכשרה חב' לביטו"]),
+    ("דיור", ["שכר דירה", "שכירות", "משכנתא", "ארנונה", "ועד בית", "מ.מ", "מועצה מקומית", "עירייה", "עיריית"]),
+    ("חשבונות בית", ["חברת חשמל", "חשמל", "תאגיד מים", "מי ההר", "מקורות", "בזק", "פרטנר",
                      "סלקום", "הוט", "hot", "yes", "גולן טלקום", "פלאפון", "סופרגז", "אמישראגז"]),
     ("בריאות", ["מכבי", "כללית", "מאוחדת", "לאומית", "סופר-פארם", "סופר פארם",
                 "בית מרקחת", "רופא", "שיניים"]),
@@ -103,16 +110,19 @@ CATEGORY_KEYWORDS: list[tuple[str, list[str]]] = [
                      "yango", "חניה", "פנגו", "סלופארק", "טסט", "מוסך", "כביש 6"]),
     (CAT_SUBSCRIPTIONS, ["netflix", "spotify", "apple.com", "icloud", "google", "disney",
                          "openai", "chatgpt", "youtube", "amazon prime", "חדר כושר"]),
-    ("חינוך וילדים", ["גן ילדים", "צהרון", "בית ספר", "חוג", "אוניברסיטה", "מכללה"]),
+    ("חינוך וילדים", ["גן ילדים", "צהרון", "בית ספר", "חוג", "אוניברסיטה", "מכללה", "ישיבה", "תלמוד תורה"]),
     ("קניות", ["amazon", "aliexpress", "זארה", "zara", "h&m", "קסטרו", "fox", "איקאה",
                "ikea", "ksp", "באג", "שיין", "shein", "עזריאלי"]),
     ("פנאי ונופש", ["סינמה", "קולנוע", "יס פלאנט", "הופעה", "טיסה", "אל על", "booking",
                     "airbnb", "מלון"]),
+    (CAT_TAXES, ["מס הכנסה", "מע\"מ", "אגרה", "רשות המסים"]),
+    (CAT_DONATIONS, ["עמותה", "(ע\"ר)", "(ע.ר)", "עגול לטובה", "עיגול לטובה", "תרומה"]),
+    (CAT_HOME, ["קרמיקה", "שיפוץ", "אינסטלציה", "תאורה", "חומרי בניין", "רהיט"]),
     ("משיכת מזומן", ["כספומט", "משיכת מזומן", "משיכה מבנקט"]),
     ("העברות", ["bit", "ביט", "פייבוקס", "paybox", "העברה"]),
 ]
 
-ALL_CATEGORIES = [c for c, _ in CATEGORY_KEYWORDS] + [CAT_OTHER]
+ALL_CATEGORIES = [c for c, _ in CATEGORY_KEYWORDS] + [CAT_CARD_UNITEMIZED, CAT_OTHER]
 
 # --- Column aliases for uploaded files --------------------------------------
 # Lower-cased header text -> canonical column. Covers common Hebrew export

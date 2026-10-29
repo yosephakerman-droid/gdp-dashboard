@@ -41,6 +41,15 @@ def ils(x: float) -> str:
     return f"₪{x:,.0f}"
 
 
+def _with_return(row: pd.Series, fallback: float) -> pd.Series:
+    """Use the product's own return when known, else the user's assumption."""
+    if row["annual_return_pct"] > 0:
+        return row
+    row = row.copy()
+    row["annual_return_pct"] = fallback
+    return row
+
+
 def build(df: pd.DataFrame, assets: pd.DataFrame, s: Settings,
           today: pd.Timestamp | None = None) -> list[Rec]:
     today = today or pd.Timestamp.today().normalize()
@@ -98,7 +107,7 @@ def build(df: pd.DataFrame, assets: pd.DataFrame, s: Settings,
     if not df.empty:
         fees = A.expenses_only(df)
         fees = fees[fees["category"] == S.CAT_BANK_FEES]
-        if not fees.empty:
+        if not fees.empty and fees["spend"].sum() > 0:
             yearly = fees["spend"].sum() / max(df["month"].nunique(), 1) * 12
             recs.append(Rec(INFO, "עמלות וריביות בנק",
                             f"שולמו {ils(fees['spend'].sum())} בעמלות/ריבית בתקופה (כ-{ils(yearly)} "
@@ -132,7 +141,7 @@ def build(df: pd.DataFrame, assets: pd.DataFrame, s: Settings,
         rows = []
         for _, r in assets.iterrows():
             t = r["type"]
-            if t in (S.ASSET_PENSION, S.ASSET_GEMEL):
+            if t in (S.ASSET_PENSION, S.ASSET_GEMEL, S.ASSET_POLICY):
                 high = r["fee_balance_pct"] > s.max_pension_fee_balance or r["fee_deposit_pct"] > s.max_pension_fee_deposit
                 bench = (s.max_pension_fee_balance, s.max_pension_fee_deposit)
             elif t == S.ASSET_HISHTALMUT:
@@ -144,11 +153,12 @@ def build(df: pd.DataFrame, assets: pd.DataFrame, s: Settings,
             else:
                 continue
             if high:
-                horizon = years if t in (S.ASSET_PENSION, S.ASSET_GEMEL) else min(years, 10) or 10
+                horizon = years if t in (S.ASSET_PENSION, S.ASSET_GEMEL, S.ASSET_POLICY) else min(years, 10) or 10
                 rows.append({
                     "name": r["name"], "type": t,
                     "fee_balance_pct": r["fee_balance_pct"], "fee_deposit_pct": r["fee_deposit_pct"],
-                    "impact": A.fee_impact(r, horizon, *bench), "horizon": horizon,
+                    "impact": A.fee_impact(_with_return(r, s.expected_return), horizon, *bench),
+                    "horizon": horizon,
                 })
         if rows:
             d = pd.DataFrame(rows)
@@ -189,8 +199,14 @@ def build(df: pd.DataFrame, assets: pd.DataFrame, s: Settings,
 
     # 9. No long-term saving recorded
     if not assets.empty and not assets["type"].isin([S.ASSET_PENSION, S.ASSET_GEMEL]).any():
-        recs.append(Rec(WARNING, "לא הוזן חיסכון פנסיוני",
-                        "לא נמצאה קרן פנסיה או קופת גמל בנתונים. אם יש כזו, כדאי להוסיף אותה; "
-                        "אם אין, זה נושא לבדיקה דחופה."))
+        if assets["type"].eq(S.ASSET_POLICY).any():
+            recs.append(Rec(WARNING, "לא הוזנה קרן פנסיה",
+                            "יש פוליסות ביטוח/חיסכון אבל לא קרן פנסיה או קופת גמל. כדאי לבדוק אם "
+                            "הפוליסות הן החיסכון הפנסיוני שלך (למשל ביטוח מנהלים), ואם יש קרן פנסיה "
+                            "דרך המעסיקים – להוסיף אותה."))
+        else:
+            recs.append(Rec(WARNING, "לא הוזן חיסכון פנסיוני",
+                            "לא נמצאה קרן פנסיה או קופת גמל בנתונים. אם יש כזו, כדאי להוסיף אותה; "
+                            "אם אין, זה נושא לבדיקה דחופה."))
 
     return sorted(recs, key=lambda r: SEVERITY_ORDER[r.severity])
