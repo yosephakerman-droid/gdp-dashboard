@@ -79,6 +79,10 @@ CAT_SAVINGS = "חיסכון והשקעות"
 CAT_CARD_BILL = "חיוב כרטיס אשראי"
 CAT_BANK_FEES = "עמלות וריביות בנק"
 CAT_SUBSCRIPTIONS = "מנויים"
+CAT_CARD_UNITEMIZED = "אשראי לא מפורט"
+CAT_DONATIONS = "תרומות"
+CAT_HOME = "בית ושיפוץ"
+CAT_TAXES = "מסים ואגרות"
 CAT_OTHER = "אחר"
 
 # Order matters: the first category whose keyword appears in the description
@@ -111,11 +115,14 @@ CATEGORY_KEYWORDS: list[tuple[str, list[str]]] = [
                "ikea", "ksp", "באג", "שיין", "shein", "עזריאלי"]),
     ("פנאי ונופש", ["סינמה", "קולנוע", "יס פלאנט", "הופעה", "טיסה", "אל על", "booking",
                     "airbnb", "מלון"]),
+    (CAT_TAXES, ["מס הכנסה", "מע\"מ", "אגרה", "רשות המסים"]),
+    (CAT_DONATIONS, ["עמותה", "(ע\"ר)", "(ע.ר)", "עגול לטובה", "עיגול לטובה", "תרומה"]),
+    (CAT_HOME, ["קרמיקה", "שיפוץ", "אינסטלציה", "תאורה", "חומרי בניין", "רהיט"]),
     ("משיכת מזומן", ["כספומט", "משיכת מזומן", "משיכה מבנקט"]),
     ("העברות", ["bit", "ביט", "פייבוקס", "paybox", "העברה"]),
 ]
 
-ALL_CATEGORIES = [c for c, _ in CATEGORY_KEYWORDS] + [CAT_OTHER]
+ALL_CATEGORIES = [c for c, _ in CATEGORY_KEYWORDS] + [CAT_CARD_UNITEMIZED, CAT_OTHER]
 
 # --- Column aliases for uploaded files --------------------------------------
 # Lower-cased header text -> canonical column. Covers common Hebrew export

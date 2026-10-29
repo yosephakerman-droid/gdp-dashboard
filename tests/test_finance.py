@@ -152,3 +152,29 @@ def test_no_bank_fee_rec_when_fees_net_to_zero():
     ]))
     recs = R.build(df, pd.DataFrame(columns=S.ASSET_COLUMNS), R.Settings(), pd.Timestamp("2026-10-27"))
     assert "עמלות וריביות בנק" not in [r.title for r in recs]
+
+
+def test_card_bill_excluded_only_in_months_with_card_detail():
+    df = A.prepare_transactions(_tx([
+        ["2026-09-01", "משכורת", 10000, S.ACCOUNT_BANK, None],
+        ["2026-09-10", "ישראכרט", -500, S.ACCOUNT_BANK, None],
+        ["2026-09-10", "שופרסל", -500, S.ACCOUNT_CREDIT, None],
+        ["2026-10-01", "משכורת", 10000, S.ACCOUNT_BANK, None],
+        ["2026-10-10", "ישראכרט", -700, S.ACCOUNT_BANK, None],
+    ]))
+    m = A.monthly_summary(df).set_index("month")["expenses"]
+    assert m.iloc[0] == 500 and m.iloc[1] == 700
+
+
+def test_unitemized_card_category_always_counts():
+    df = A.prepare_transactions(_tx([
+        ["2026-09-10", "ישראכרט", -800, S.ACCOUNT_BANK, S.CAT_CARD_UNITEMIZED],
+        ["2026-09-10", "שופרסל", -500, S.ACCOUNT_CREDIT, None],
+    ]))
+    assert A.monthly_summary(df)["expenses"].iloc[0] == 1300
+
+
+def test_new_category_keywords():
+    assert A.guess_category("מס הכנסה עצמאיים", -100) == S.CAT_TAXES
+    assert A.guess_category("עזר מציון (ע\"ר)", -50) == S.CAT_DONATIONS
+    assert A.guess_category("טובול קרמיקה בע\"מ", -2000) == S.CAT_HOME
