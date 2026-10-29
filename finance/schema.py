@@ -81,7 +81,10 @@ CAT_BANK_FEES = "עמלות וריביות בנק"
 CAT_SUBSCRIPTIONS = "מנויים"
 CAT_CARD_UNITEMIZED = "אשראי לא מפורט"
 CAT_DONATIONS = "תרומות"
-CAT_HOME = "בית ושיפוץ"
+CAT_HOME = "בית וריהוט"
+CAT_RENOVATION = "שיפוץ"
+# Big one-time projects, shown apart from regular monthly spending.
+ONE_OFF_CATEGORIES = {CAT_RENOVATION}
 CAT_TAXES = "מסים ואגרות"
 CAT_OTHER = "אחר"
 
@@ -117,7 +120,9 @@ CATEGORY_KEYWORDS: list[tuple[str, list[str]]] = [
                     "airbnb", "מלון"]),
     (CAT_TAXES, ["מס הכנסה", "מע\"מ", "אגרה", "רשות המסים"]),
     (CAT_DONATIONS, ["עמותה", "(ע\"ר)", "(ע.ר)", "עגול לטובה", "עיגול לטובה", "תרומה"]),
-    (CAT_HOME, ["קרמיקה", "שיפוץ", "אינסטלציה", "תאורה", "חומרי בניין", "רהיט"]),
+    (CAT_RENOVATION, ["קרמיקה", "שיפוץ", "אינסטלציה", "תאורה", "חומרי בניין", "טמבור", "עבודת חשמל",
+                      "יונידורס", "מדפי"]),
+    (CAT_HOME, ["רהיט", "איקאה", "ikea"]),
     ("משיכת מזומן", ["כספומט", "משיכת מזומן", "משיכה מבנקט"]),
     ("העברות", ["bit", "ביט", "פייבוקס", "paybox", "העברה"]),
 ]

@@ -59,11 +59,19 @@ def build(df: pd.DataFrame, assets: pd.DataFrame, s: Settings,
 
     # 1. Spending more than earning
     if avg and avg.months:
-        if avg.expenses > avg.income:
+        if avg.expenses > avg.income and avg.one_off > 0 and avg.regular <= avg.income:
+            recs.append(Rec(WARNING, "השיפוץ מכניס את התזרים למינוס",
+                            f"בממוצע חודשי ההוצאות ({ils(avg.expenses)}) עולות על ההכנסות ({ils(avg.income)}), "
+                            f"אבל {ils(avg.one_off)} מהן הן שיפוץ. בלי השיפוץ ההוצאות הרגילות הן {ils(avg.regular)}, "
+                            f"כלומר נשארים כ-{ils(avg.income - avg.regular)} בחודש. כדאי לוודא שהשיפוץ ממומן "
+                            "מחיסכון שיועד לו ולא מהעו\"ש השוטף.", impact=(avg.expenses - avg.income) * 12))
+        elif avg.expenses > avg.income:
             gap = avg.expenses - avg.income
+            extra = f" גם בלי השיפוץ ({ils(avg.one_off)} בחודש) ההוצאות הרגילות ({ils(avg.regular)}) גבוהות מההכנסות." \
+                if avg.one_off > 0 else ""
             recs.append(Rec(CRITICAL, "ההוצאות גבוהות מההכנסות",
                             f"בממוצע חודשי ההוצאות ({ils(avg.expenses)}) עולות על ההכנסות "
-                            f"({ils(avg.income)}) ב-{ils(gap)}. כדאי להתחיל מהקטגוריות הגדולות "
+                            f"({ils(avg.income)}) ב-{ils(gap)}.{extra} כדאי להתחיל מהקטגוריות הגדולות "
                             "ומההוצאות הקבועות בלשונית 'פילוחים'.", impact=gap * 12))
         elif avg.savings_rate < s.savings_rate_target:
             need = s.savings_rate_target * avg.income - (avg.income - avg.expenses)
@@ -78,17 +86,18 @@ def build(df: pd.DataFrame, assets: pd.DataFrame, s: Settings,
                             "ולא נשאר בעו\"ש."))
 
     # 2. Emergency fund
-    if avg and avg.expenses > 0 and not assets.empty:
-        target = avg.expenses * s.emergency_months
+    monthly = (avg.regular or avg.expenses) if avg else 0
+    if avg and monthly > 0 and not assets.empty:
+        target = monthly * s.emergency_months
         if nw.cash < target:
-            recs.append(Rec(WARNING if nw.cash >= avg.expenses * 3 else CRITICAL,
+            recs.append(Rec(WARNING if nw.cash >= monthly * 3 else CRITICAL,
                             "קרן חירום חסרה",
                             f"מזומן זמין (עו\"ש + פיקדונות): {ils(nw.cash)}, כ-"
-                            f"{nw.cash / avg.expenses:.1f} חודשי הוצאה. היעד שהוגדר: "
+                            f"{nw.cash / monthly:.1f} חודשי הוצאה רגילה. היעד שהוגדר: "
                             f"{s.emergency_months:g} חודשים ({ils(target)}). חסרים {ils(target - nw.cash)}.",
                             impact=target - nw.cash))
         else:
-            excess = nw.cash - avg.expenses * (s.emergency_months + s.excess_cash_buffer_months)
+            excess = nw.cash - monthly * (s.emergency_months + s.excess_cash_buffer_months)
             if excess > 0:
                 recs.append(Rec(INFO, "יותר מזומן ממה שנדרש לחירום",
                                 f"יש כ-{ils(excess)} מעבר לקרן החירום ולמרווח ביטחון. "
@@ -96,7 +105,7 @@ def build(df: pd.DataFrame, assets: pd.DataFrame, s: Settings,
                                 "או השקעה לטווח ארוך לפי היעדים שלך.", impact=excess))
             else:
                 recs.append(Rec(GOOD, "קרן חירום קיימת",
-                                f"המזומן הזמין מכסה כ-{nw.cash / avg.expenses:.1f} חודשי הוצאה."))
+                                f"המזומן הזמין מכסה כ-{nw.cash / monthly:.1f} חודשי הוצאה."))
 
     # 3. Overdraft and bank fees
     checking = assets[assets["type"] == S.ASSET_CHECKING] if not assets.empty else assets

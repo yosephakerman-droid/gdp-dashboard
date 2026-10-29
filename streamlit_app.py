@@ -423,6 +423,9 @@ with tabs[0]:
         c[3].metric("הוצאה חודשית ממוצעת", ils(avg.expenses))
         c[4].metric("שיעור חיסכון", pct(avg.savings_rate),
                     help="(הכנסות − הוצאות) / הכנסות. העברות לחיסכון אינן נספרות כהוצאה.")
+        if avg.one_off > 0:
+            st.caption(f"מתוך ההוצאה החודשית, {ils(avg.one_off)} הם שיפוץ (חד-פעמי). "
+                       f"ההוצאה הרגילה: {ils(avg.regular)} בחודש.")
         st.caption(f"ממוצעים לפי {avg.months} חודשים מלאים בתקופה שנבחרה.")
     if not summary.empty:
         st.subheader("הכנסות מול הוצאות")

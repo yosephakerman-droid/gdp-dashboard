@@ -21,7 +21,7 @@ def guess_category(description: str, amount: float) -> str:
         if any(k.lower() in text for k in keywords):
             # An incoming transfer (bit, bank transfer) is income, not spend.
             # Other positive amounts in spend categories are refunds.
-            if amount > 0 and category == "העברות":
+            if amount > 0 and category in ("העברות", S.CAT_RENOVATION, S.CAT_HOME):
                 return S.CAT_OTHER_INCOME
             return category
     return S.CAT_OTHER_INCOME if amount > 0 else S.CAT_OTHER
@@ -68,7 +68,8 @@ def assign_kinds(df: pd.DataFrame) -> pd.DataFrame:
 def monthly_summary(df: pd.DataFrame) -> pd.DataFrame:
     """One row per month: income, expenses, savings transfers, net."""
     if df.empty:
-        return pd.DataFrame(columns=["month", "income", "expenses", "savings", "net", "savings_rate"])
+        return pd.DataFrame(columns=["month", "income", "expenses", "one_off", "regular", "savings", "net",
+                                     "savings_rate"])
     g = df.groupby(["month", "kind"])["amount"].sum().unstack(fill_value=0.0)
     for k in (S.KIND_INCOME, S.KIND_EXPENSE, S.KIND_SAVING):
         if k not in g.columns:
@@ -82,6 +83,9 @@ def monthly_summary(df: pd.DataFrame) -> pd.DataFrame:
             "savings": -g[S.KIND_SAVING],
         }
     )
+    one_off = df[(df["kind"] == S.KIND_EXPENSE) & df["category"].isin(S.ONE_OFF_CATEGORIES)]
+    out["one_off"] = (-one_off.groupby("month")["amount"].sum()).reindex(out.index, fill_value=0.0)
+    out["regular"] = out["expenses"] - out["one_off"]
     out["net"] = out["income"] - out["expenses"] - out["savings"]
     out["savings_rate"] = np.where(
         out["income"] > 0, (out["income"] - out["expenses"]) / out["income"], np.nan
@@ -107,6 +111,8 @@ class Averages:
     savings: float
     net: float
     savings_rate: float
+    one_off: float = 0.0
+    regular: float = 0.0
 
 
 def averages(df: pd.DataFrame) -> Averages:
@@ -123,6 +129,8 @@ def averages(df: pd.DataFrame) -> Averages:
         savings=m["savings"].mean(),
         net=m["net"].mean(),
         savings_rate=(inc - exp) / inc if inc > 0 else float("nan"),
+        one_off=m["one_off"].mean(),
+        regular=m["regular"].mean(),
     )
 
 

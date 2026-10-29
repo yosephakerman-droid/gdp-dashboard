@@ -177,4 +177,18 @@ def test_unitemized_card_category_always_counts():
 def test_new_category_keywords():
     assert A.guess_category("מס הכנסה עצמאיים", -100) == S.CAT_TAXES
     assert A.guess_category("עזר מציון (ע\"ר)", -50) == S.CAT_DONATIONS
-    assert A.guess_category("טובול קרמיקה בע\"מ", -2000) == S.CAT_HOME
+    assert A.guess_category("טובול קרמיקה בע\"מ", -2000) == S.CAT_RENOVATION
+
+
+def test_renovation_is_one_off_and_split_from_regular():
+    df = A.prepare_transactions(_tx([
+        ["2026-09-01", "משכורת", 10000, S.ACCOUNT_BANK, None],
+        ["2026-09-03", "טובול קרמיקה", -9000, S.ACCOUNT_CREDIT, None],
+        ["2026-09-04", "שופרסל", -5000, S.ACCOUNT_CREDIT, None],
+        ["2026-09-05", "העברה/אקרמן/לשיפוץ", 3000, S.ACCOUNT_BANK, None],
+    ]))
+    m = A.monthly_summary(df).iloc[0]
+    assert m["expenses"] == 14000 and m["one_off"] == 9000 and m["regular"] == 5000
+    assert df.loc[df.description.str.contains("לשיפוץ"), "category"].iloc[0] == S.CAT_OTHER_INCOME
+    recs = R.build(df, pd.DataFrame(columns=S.ASSET_COLUMNS), R.Settings(), pd.Timestamp("2026-10-27"))
+    assert recs[0].title == "השיפוץ מכניס את התזרים למינוס"
